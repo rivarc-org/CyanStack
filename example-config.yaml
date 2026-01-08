@@ -1,0 +1,44 @@
+id: com.medusajs.backend
+
+version: "2.1.0"
+name: "Medusa E-Commerce Backend"
+category: "worker" ## or stateful
+
+
+inputs:
+  - id: INTERNAL_PORT
+    type: port
+    inject_as: PORT
+  - id: JWT_SECRET
+    type: secret
+    generate: true
+    inject_as: JWT_SECRET
+  - id: MAIN_DATABASE
+    type: plugin
+    accepts: com.cyanstack.postgres
+    env_mapping:
+      CONTAINER_URL: URL  ## URL get's assigned to either EXTERNAL_URL or INTERNAL_URL, depending where the other plugin or this plugin is hosted.
+
+      DATABASE_URL: CONNECTION_STRING
+lifecycle:
+  start_command: ["medusa", "start"]
+  post_install:
+    command: ["medusa", "seed", "--seed-file=data/seed.json"]
+    timeout: 300s
+
+  migration:
+    command: ["medusa", "migrations", "run"]
+    timeout: 120s
+    
+
+  health_check:
+    path: "/health"
+exports:
+  # Manager automatically exports the {{INTERNAL_HOST}} template variable.
+  # Manager automatically exports {{INTERNAL_PORT}} using the assigned system port.
+  # Manager automatically exports {{INTERNAL_URL}} using INTERNAL_HOST and INTERNAL_PORT
+  # Manager automatically exports the {{EXTERNAL_HOST}} template variable.
+  # Manager automatically exports {{EXTERNAL_PORT}} using the assigned system port.
+  # Manager automatically exports {{EXTERNAL_URL}} using EXTERNAL_HOST and EXTERNAL_PORT
+  - key: CUSTOM_EXPORT
+    value: "EXPORT"

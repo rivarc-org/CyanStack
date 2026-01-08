@@ -1,0 +1,25 @@
+id: com.cyanstack.postgres
+version: "15.0"
+name: "PostgreSQL Database"
+category: stateful
+
+inputs:
+  - id: POSTGRES_PORT
+    type: port
+    inject_as: PGPORT
+  - id: POSTGRES_PASSWORD
+    type: secret
+    generate: true
+    inject_as: POSTGRES_PASSWORD
+
+lifecycle:
+  start_command: ["docker-entrypoint.sh", "postgres"]
+  health_check:
+    path: ""
+    port: "5432"
+
+exports:
+  - key: CONNECTION_STRING
+    value: "postgresql://postgres:{{POSTGRES_PASSWORD}}@{{INTERNAL_HOST}}:{{INTERNAL_PORT}}/postgres"
+  - key: URL
+    value: "{{INTERNAL_HOST}}:{{INTERNAL_PORT}}"
