@@ -14,8 +14,12 @@ type ContainerConfig struct {
 	// Extended configuration
 	Command       []string // Override entrypoint command
 	WorkDir       string   // Working directory inside container
-	Network       string   // Network to attach to
 	RestartPolicy string   // "no", "always", "on-failure", "unless-stopped"
+
+	// Networking configuration
+	Network        string              // Deprecated: Use Networks instead. Kept for backward compatibility.
+	Networks       []string            // Networks to attach to (can attach to multiple)
+	NetworkAliases map[string][]string // Network name -> aliases mapping for DNS resolution
 }
 
 // ResourceRequirements defines resource constraints for scheduling

@@ -8,9 +8,10 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/mount"
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 
@@ -150,8 +151,30 @@ func (d *Driver) Run(ctx context.Context, conf interfaces.ContainerConfig) (stri
 		}
 	}
 
+	// Build networking config from Networks (or fallback to deprecated Network field)
+	networks := conf.Networks
+	if len(networks) == 0 && conf.Network != "" {
+		networks = []string{conf.Network}
+	}
+
+	var networkingConfig *network.NetworkingConfig
+	if len(networks) > 0 {
+		endpointsConfig := make(map[string]*network.EndpointSettings)
+		for _, netName := range networks {
+			endpoint := &network.EndpointSettings{}
+			// Add aliases if provided
+			if aliases, ok := conf.NetworkAliases[netName]; ok {
+				endpoint.Aliases = aliases
+			}
+			endpointsConfig[netName] = endpoint
+		}
+		networkingConfig = &network.NetworkingConfig{
+			EndpointsConfig: endpointsConfig,
+		}
+	}
+
 	// Create container
-	resp, err := d.client.ContainerCreate(ctx, containerConfig, hostConfig, nil, nil, conf.Name)
+	resp, err := d.client.ContainerCreate(ctx, containerConfig, hostConfig, networkingConfig, nil, conf.Name)
 	if err != nil {
 		return "", fmt.Errorf("creating container: %w", err)
 	}
@@ -255,7 +278,7 @@ func (d *Driver) List(ctx context.Context) ([]interfaces.ContainerState, error) 
 
 // Exec runs a command in a container.
 func (d *Driver) Exec(ctx context.Context, containerID string, cmd []string) (int, error) {
-	execConfig := types.ExecConfig{
+	execConfig := container.ExecOptions{
 		Cmd:          cmd,
 		AttachStdout: true,
 		AttachStderr: true,
@@ -266,7 +289,7 @@ func (d *Driver) Exec(ctx context.Context, containerID string, cmd []string) (in
 		return -1, fmt.Errorf("creating exec: %w", err)
 	}
 
-	if err := d.client.ContainerExecStart(ctx, execResp.ID, types.ExecStartCheck{}); err != nil {
+	if err := d.client.ContainerExecStart(ctx, execResp.ID, container.ExecStartOptions{}); err != nil {
 		return -1, fmt.Errorf("starting exec: %w", err)
 	}
 
@@ -340,6 +363,12 @@ func (d *Driver) StartupLimit() int {
 	return d.semaphore.Limit()
 }
 
+// Client returns the underlying Docker client.
+// This is useful for network management and other advanced operations.
+func (d *Driver) Client() *client.Client {
+	return d.client
+}
+
 // ensureImage pulls an image if not present locally.
 func (d *Driver) ensureImage(ctx context.Context, imageName string) error {
 	_, _, err := d.client.ImageInspectWithRaw(ctx, imageName)
@@ -347,7 +376,7 @@ func (d *Driver) ensureImage(ctx context.Context, imageName string) error {
 		return nil // Image exists
 	}
 
-	reader, err := d.client.ImagePull(ctx, imageName, types.ImagePullOptions{})
+	reader, err := d.client.ImagePull(ctx, imageName, image.PullOptions{})
 	if err != nil {
 		return fmt.Errorf("pulling image %s: %w", imageName, err)
 	}
