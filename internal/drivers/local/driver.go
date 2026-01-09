@@ -4,15 +4,19 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
 
 	"github.com/cyanstack/cyanstack/internal/drivers/interfaces"
@@ -114,13 +118,14 @@ func (d *Driver) Run(ctx context.Context, conf interfaces.ContainerConfig) (stri
 	}
 
 	// Prepare port bindings
+	// Ports map is containerPort -> hostPort (use "" for ephemeral)
 	portBindings := nat.PortMap{}
 	exposedPorts := nat.PortSet{}
-	for hostPort, containerPort := range conf.Ports {
+	for containerPort, hostPort := range conf.Ports {
 		port := nat.Port(containerPort + "/tcp")
 		exposedPorts[port] = struct{}{}
 		portBindings[port] = []nat.PortBinding{
-			{HostIP: "0.0.0.0", HostPort: hostPort},
+			{HostIP: "127.0.0.1", HostPort: hostPort}, // hostPort="" means Docker assigns
 		}
 	}
 	containerConfig.ExposedPorts = exposedPorts
@@ -229,10 +234,20 @@ func (d *Driver) Inspect(ctx context.Context, containerID string) (*interfaces.C
 		return nil, fmt.Errorf("inspecting container: %w", err)
 	}
 
+	// Extract port bindings
+	portBindings := make(map[string]string)
+	for containerPort, bindings := range info.NetworkSettings.Ports {
+		if len(bindings) > 0 {
+			portBindings[string(containerPort)] = bindings[0].HostPort
+		}
+	}
+
 	state := &interfaces.ContainerState{
-		ID:     info.ID,
-		Name:   info.Name,
-		Status: mapDockerStatus(info.State.Status),
+		ID:           info.ID,
+		Name:         info.Name,
+		Status:       mapDockerStatus(info.State.Status),
+		PortBindings: portBindings,
+		Labels:       info.Config.Labels,
 	}
 
 	if info.State.StartedAt != "" {
@@ -276,8 +291,8 @@ func (d *Driver) List(ctx context.Context) ([]interfaces.ContainerState, error) 
 	return states, nil
 }
 
-// Exec runs a command in a container.
-func (d *Driver) Exec(ctx context.Context, containerID string, cmd []string) (int, error) {
+// Exec runs a command in a container with optional output streaming.
+func (d *Driver) Exec(ctx context.Context, containerID string, cmd []string, output io.Writer) (int, error) {
 	execConfig := container.ExecOptions{
 		Cmd:          cmd,
 		AttachStdout: true,
@@ -289,8 +304,21 @@ func (d *Driver) Exec(ctx context.Context, containerID string, cmd []string) (in
 		return -1, fmt.Errorf("creating exec: %w", err)
 	}
 
-	if err := d.client.ContainerExecStart(ctx, execResp.ID, container.ExecStartOptions{}); err != nil {
-		return -1, fmt.Errorf("starting exec: %w", err)
+	// Attach to exec to get output stream
+	attachResp, err := d.client.ContainerExecAttach(ctx, execResp.ID, container.ExecAttachOptions{})
+	if err != nil {
+		return -1, fmt.Errorf("attaching to exec: %w", err)
+	}
+	defer attachResp.Close()
+
+	// Stream output if writer provided
+	if output != nil {
+		go func() {
+			// Docker multiplexes stdout/stderr with 8-byte header
+			stdcopy.StdCopy(output, output, attachResp.Reader)
+		}()
+	} else {
+		go io.Copy(io.Discard, attachResp.Reader)
 	}
 
 	// Wait for completion and get exit code
@@ -345,6 +373,136 @@ func (d *Driver) WaitForHealthy(ctx context.Context, containerID string, timeout
 	}
 
 	return fmt.Errorf("timeout waiting for healthy status")
+}
+
+// GetContainer finds a container by name and returns its state with port bindings.
+func (d *Driver) GetContainer(ctx context.Context, name string) (*interfaces.ContainerState, error) {
+	// Use ^/? to handle Docker returning names with or without leading slash
+	containers, err := d.client.ContainerList(ctx, container.ListOptions{
+		All:     true,
+		Filters: filters.NewArgs(filters.Arg("name", "^/?"+name+"$")),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("listing containers: %w", err)
+	}
+
+	if len(containers) == 0 {
+		return nil, interfaces.ErrContainerNotFound
+	}
+
+	c := containers[0]
+
+	// Get full inspection for port bindings and labels
+	info, err := d.client.ContainerInspect(ctx, c.ID)
+	if err != nil {
+		return nil, fmt.Errorf("inspecting container: %w", err)
+	}
+
+	// Extract port bindings
+	portBindings := make(map[string]string)
+	for containerPort, bindings := range info.NetworkSettings.Ports {
+		if len(bindings) > 0 {
+			portBindings[string(containerPort)] = bindings[0].HostPort
+		}
+	}
+
+	state := &interfaces.ContainerState{
+		ID:           c.ID,
+		Name:         c.Names[0], // Includes leading slash
+		Status:       mapDockerStatus(c.State),
+		PortBindings: portBindings,
+		Labels:       info.Config.Labels,
+	}
+
+	if info.State.StartedAt != "" {
+		state.StartedAt, _ = time.Parse(time.RFC3339Nano, info.State.StartedAt)
+	}
+
+	return state, nil
+}
+
+// WaitForService waits for a container's service to respond to health checks.
+func (d *Driver) WaitForService(ctx context.Context, containerID string, config interfaces.HealthCheckConfig) error {
+	timeout := config.Timeout
+	if timeout == 0 {
+		timeout = 60 * time.Second
+	}
+	interval := config.Interval
+	if interval == 0 {
+		interval = 1 * time.Second
+	}
+
+	deadline := time.Now().Add(timeout)
+
+	for time.Now().Before(deadline) {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		// Get current port bindings
+		state, err := d.Inspect(ctx, containerID)
+		if err != nil {
+			return fmt.Errorf("inspecting container for health check: %w", err)
+		}
+
+		if state.Status != interfaces.StatusRunning {
+			return fmt.Errorf("container not running: %s", state.Status)
+		}
+
+		// Find the host port for the container port
+		portKey := fmt.Sprintf("%d/tcp", config.ContainerPort)
+		hostPort, ok := state.PortBindings[portKey]
+		if !ok || hostPort == "" {
+			time.Sleep(interval)
+			continue // Port not bound yet
+		}
+
+		addr := fmt.Sprintf("127.0.0.1:%s", hostPort)
+
+		if config.Path != "" {
+			// HTTP health check
+			if err := d.httpHealthCheck(addr, config.Path); err == nil {
+				return nil
+			}
+		} else {
+			// TCP health check
+			if err := d.tcpHealthCheck(addr); err == nil {
+				return nil
+			}
+		}
+
+		time.Sleep(interval)
+	}
+
+	return fmt.Errorf("health check timeout after %v", timeout)
+}
+
+// tcpHealthCheck attempts a TCP connection to verify service is listening.
+func (d *Driver) tcpHealthCheck(addr string) error {
+	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
+	if err != nil {
+		return err
+	}
+	conn.Close()
+	return nil
+}
+
+// httpHealthCheck performs an HTTP GET and checks for 2xx response.
+func (d *Driver) httpHealthCheck(addr, path string) error {
+	url := fmt.Sprintf("http://%s%s", addr, path)
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return nil
+	}
+	return fmt.Errorf("HTTP %d", resp.StatusCode)
 }
 
 // DataPath returns the data directory for a project/plugin.

@@ -36,6 +36,9 @@ type RuntimeContext struct {
 
 	// Plugin configs indexed by plugin ID
 	PluginConfigs map[string]*config.PluginConfig
+
+	// Actions taken for each node during deployment
+	Actions map[string]DeployAction
 }
 
 // PortAssignment holds the host and container port for a node
@@ -43,6 +46,15 @@ type PortAssignment struct {
 	HostPort      int // Port on the host for external access
 	ContainerPort int // Port inside the container (from default or same as host)
 }
+
+// DeployAction represents the action taken for a node during deployment
+type DeployAction string
+
+const (
+	ActionCreated   DeployAction = "created"   // Fresh container creation
+	ActionUpdated   DeployAction = "updated"   // Container recreated due to config change
+	ActionUnchanged DeployAction = "unchanged" // Container already up-to-date
+)
 
 // NewRuntimeContext creates an initialized RuntimeContext
 func NewRuntimeContext(projectID, projectName, revisionID string) *RuntimeContext {
@@ -54,6 +66,7 @@ func NewRuntimeContext(projectID, projectName, revisionID string) *RuntimeContex
 		AssignedPorts: make(map[string]PortAssignment),
 		ContainerIDs:  make(map[string]string),
 		PluginConfigs: make(map[string]*config.PluginConfig),
+		Actions:       make(map[string]DeployAction),
 	}
 }
 
@@ -88,6 +101,7 @@ type DeploymentPlan struct {
 // DeployResult contains the result of a deployment
 type DeployResult struct {
 	Success      bool
-	ContainerIDs map[string]string // nodeID -> containerID
+	ContainerIDs map[string]string       // nodeID -> containerID
+	Actions      map[string]DeployAction // nodeID -> action taken
 	Errors       []error
 }

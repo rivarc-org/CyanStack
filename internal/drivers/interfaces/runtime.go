@@ -37,11 +37,20 @@ type RuntimeDriver interface {
 
 	// Exec executes a command inside a running container.
 	// Used for lifecycle hooks like post_install and migration.
+	// Streams stdout/stderr to the provided writer (can be nil for no output).
 	// Returns the exit code.
-	Exec(ctx context.Context, containerID string, cmd []string) (int, error)
+	Exec(ctx context.Context, containerID string, cmd []string, output io.Writer) (int, error)
 
-	// WaitForHealthy waits for a container to pass health checks.
+	// WaitForHealthy waits for a container to pass Docker health checks.
 	WaitForHealthy(ctx context.Context, containerID string, timeout time.Duration) error
+
+	// GetContainer returns a container's state by name.
+	// Returns ErrContainerNotFound if the container does not exist.
+	GetContainer(ctx context.Context, name string) (*ContainerState, error)
+
+	// WaitForService waits for a container's service to become responsive.
+	// Uses TCP or HTTP health checks based on the config.
+	WaitForService(ctx context.Context, containerID string, config HealthCheckConfig) error
 }
 
 // RuntimeDriverWithInfo extends RuntimeDriver with metadata.

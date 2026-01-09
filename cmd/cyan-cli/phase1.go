@@ -249,7 +249,7 @@ var volumeTestCmd = &cobra.Command{
 		exitCode, err := driver.Exec(ctx, containerID, []string{
 			"psql", "-U", "postgres", "-d", "testdb", "-c",
 			fmt.Sprintf("CREATE TABLE IF NOT EXISTS persistence_test (id SERIAL PRIMARY KEY, value TEXT, created_at TIMESTAMP DEFAULT NOW()); INSERT INTO persistence_test (value) VALUES ('%s');", testValue),
-		})
+		}, nil)
 		if err != nil {
 			cleanup(ctx, driver, containerID)
 			return fmt.Errorf("failed to insert data: %w", err)
@@ -290,7 +290,7 @@ var volumeTestCmd = &cobra.Command{
 		exitCode, err = driver.Exec(ctx, containerID2, []string{
 			"psql", "-U", "postgres", "-d", "testdb", "-c",
 			fmt.Sprintf("SELECT value FROM persistence_test WHERE value = '%s';", testValue),
-		})
+		}, nil)
 		if err != nil {
 			cleanup(ctx, driver, containerID2)
 			return fmt.Errorf("failed to query data: %w", err)

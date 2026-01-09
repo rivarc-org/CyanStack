@@ -27,6 +27,9 @@ func init() {
 	// Phase 3 commands
 	rootCmd.AddCommand(deployTestCmd)
 
+	// Phase 4 commands
+	rootCmd.AddCommand(cycleTestCmd)
+
 	// Meta commands
 	rootCmd.AddCommand(testAllCmd)
 }

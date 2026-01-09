@@ -7,7 +7,7 @@ type ContainerConfig struct {
 	Image   string
 	Name    string
 	Env     map[string]string
-	Ports   map[string]string // host:container mapping, e.g. "8080" -> "80"
+	Ports   map[string]string // container:host mapping, e.g. "80" -> "8080" or "5432" -> "" (ephemeral)
 	Volumes map[string]string // host:container mapping, e.g. "/host/path" -> "/container/path"
 	Labels  map[string]string
 
@@ -32,12 +32,14 @@ type ResourceRequirements struct {
 
 // ContainerState represents the current state of a container
 type ContainerState struct {
-	ID        string
-	Name      string
-	Status    ContainerStatus
-	StartedAt time.Time
-	ExitCode  int
-	Error     string
+	ID           string
+	Name         string
+	Status       ContainerStatus
+	StartedAt    time.Time
+	ExitCode     int
+	Error        string
+	PortBindings map[string]string // containerPort/tcp -> hostPort, e.g. "5432/tcp" -> "32789"
+	Labels       map[string]string // Container labels for config hash and management
 }
 
 // ContainerStatus represents the lifecycle state of a container
@@ -58,4 +60,12 @@ type DriverInfo struct {
 	Name        string // "local", "aws-ecs", "kubernetes"
 	Version     string
 	MaxParallel int // Maximum concurrent startup operations
+}
+
+// HealthCheckConfig defines how to health check a service
+type HealthCheckConfig struct {
+	ContainerPort int           // The container port to check (e.g., 5432)
+	Path          string        // HTTP path for HTTP checks (empty = TCP only)
+	Timeout       time.Duration // Total timeout (default 60s)
+	Interval      time.Duration // Check interval (default 1s)
 }

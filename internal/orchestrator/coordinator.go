@@ -1,9 +1,12 @@
 package orchestrator
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -119,7 +122,11 @@ func (c *Coordinator) Deploy(ctx context.Context, revisionID string) (*DeployRes
 
 	// Handle empty graph
 	if len(plan.Tiers) == 0 {
-		return &DeployResult{Success: true, ContainerIDs: make(map[string]string)}, nil
+		return &DeployResult{
+			Success:      true,
+			ContainerIDs: make(map[string]string),
+			Actions:      make(map[string]DeployAction),
+		}, nil
 	}
 
 	// 6. Initialize runtime context
@@ -157,6 +164,7 @@ func (c *Coordinator) Deploy(ctx context.Context, revisionID string) (*DeployRes
 	return &DeployResult{
 		Success:      true,
 		ContainerIDs: runtimeCtx.ContainerIDs,
+		Actions:      runtimeCtx.Actions,
 	}, nil
 }
 
@@ -180,7 +188,11 @@ func (c *Coordinator) DeployDirect(
 
 	// Handle empty graph
 	if len(plan.Tiers) == 0 {
-		return &DeployResult{Success: true, ContainerIDs: make(map[string]string)}, nil
+		return &DeployResult{
+			Success:      true,
+			ContainerIDs: make(map[string]string),
+			Actions:      make(map[string]DeployAction),
+		}, nil
 	}
 
 	// Initialize runtime context
@@ -217,6 +229,7 @@ func (c *Coordinator) DeployDirect(
 	return &DeployResult{
 		Success:      true,
 		ContainerIDs: runtimeCtx.ContainerIDs,
+		Actions:      runtimeCtx.Actions,
 	}, nil
 }
 
@@ -271,7 +284,7 @@ func (c *Coordinator) deployTier(
 	return nil
 }
 
-// deployNode deploys a single node
+// deployNode deploys a single node with smart update support
 func (c *Coordinator) deployNode(
 	ctx context.Context,
 	node NodeState,
@@ -293,21 +306,87 @@ func (c *Coordinator) deployNode(
 	// 2. Build container configuration
 	containerConfig := c.buildContainerConfig(node, env, runtimeCtx, projectNetwork)
 
-	// 3. Start container
-	containerID, err := c.driver.Run(ctx, containerConfig)
-	if err != nil {
+	// 3. Compute config hash for idempotency
+	pluginConfig := runtimeCtx.PluginConfigs[node.PluginID]
+	var command []string
+	if pluginConfig != nil {
+		command = pluginConfig.Lifecycle.StartCommand
+	}
+	configHash := ComputeConfigHash(node.Image, env, command)
+	containerConfig.Labels[ConfigHashLabel] = configHash
+
+	// 4. Check for existing container
+	existing, err := c.driver.GetContainer(ctx, containerConfig.Name)
+
+	var action DeployAction
+	var containerID string
+	var runPostInstall bool
+
+	if errors.Is(err, interfaces.ErrContainerNotFound) {
+		// Case A: Fresh container creation
+		action = ActionCreated
+		runPostInstall = true
+
+		containerID, err = c.driver.Run(ctx, containerConfig)
+		if err != nil {
+			return &DeploymentError{
+				Phase:     "start",
+				TierLevel: tierLevel,
+				NodeID:    node.ID,
+				Cause:     err,
+			}
+		}
+	} else if err != nil {
 		return &DeploymentError{
-			Phase:     "start",
+			Phase:     "inspect",
 			TierLevel: tierLevel,
 			NodeID:    node.ID,
 			Cause:     err,
 		}
+	} else {
+		// Container exists - check config hash
+		existingHash := existing.Labels[ConfigHashLabel]
+
+		if existingHash == configHash {
+			// Case B: Unchanged - container is up to date
+			action = ActionUnchanged
+			containerID = existing.ID
+			runtimeCtx.ContainerIDs[node.ID] = containerID
+			runtimeCtx.Actions[node.ID] = action
+
+			// Populate port info from existing container for dependent nodes
+			c.updateRuntimePortsFromContainer(runtimeCtx, node.ID, existing)
+
+			return nil
+		}
+
+		// Case C: Update needed - config has changed
+		action = ActionUpdated
+		runPostInstall = false // No post_install on updates, only migration
+
+		// Stop and remove old container
+		if stopErr := c.driver.Stop(ctx, existing.ID); stopErr != nil {
+			// Log but continue - container might already be stopped
+		}
+		if removeErr := c.driver.Remove(ctx, existing.ID); removeErr != nil {
+			// Log but continue
+		}
+
+		containerID, err = c.driver.Run(ctx, containerConfig)
+		if err != nil {
+			return &DeploymentError{
+				Phase:     "start",
+				TierLevel: tierLevel,
+				NodeID:    node.ID,
+				Cause:     err,
+			}
+		}
 	}
 
 	runtimeCtx.ContainerIDs[node.ID] = containerID
+	runtimeCtx.Actions[node.ID] = action
 
-	// 4. Wait for container to be running (Phase 3: no deep health checks)
-	// Just verify the container started successfully
+	// 5. Wait for container to be running
 	startCtx, cancel := context.WithTimeout(ctx, c.startupTimeout)
 	defer cancel()
 
@@ -320,8 +399,29 @@ func (c *Coordinator) deployNode(
 		}
 	}
 
-	// 5. Run lifecycle hooks (migration) if defined
-	if err := c.runLifecycleHooks(ctx, node, containerID, runtimeCtx); err != nil {
+	// 6. Wait for service health check (TCP/HTTP on assigned port)
+	if portAssign, ok := runtimeCtx.AssignedPorts[node.ID]; ok && portAssign.ContainerPort > 0 {
+		healthConfig := interfaces.HealthCheckConfig{
+			ContainerPort: portAssign.ContainerPort,
+			Path:          "", // Default to TCP check
+			Timeout:       60 * time.Second,
+		}
+		// If plugin specifies an HTTP health check path, use it
+		if pluginConfig != nil && pluginConfig.Lifecycle.HealthCheck.Path != "" {
+			healthConfig.Path = pluginConfig.Lifecycle.HealthCheck.Path
+		}
+		if err := c.driver.WaitForService(startCtx, containerID, healthConfig); err != nil {
+			return &DeploymentError{
+				Phase:     "healthcheck",
+				TierLevel: tierLevel,
+				NodeID:    node.ID,
+				Cause:     err,
+			}
+		}
+	}
+
+	// 7. Run lifecycle hooks (post_install and/or migration)
+	if err := c.runLifecycleHooks(ctx, node, containerID, runtimeCtx, runPostInstall); err != nil {
 		return &DeploymentError{
 			Phase:     "hook",
 			TierLevel: tierLevel,
@@ -331,6 +431,20 @@ func (c *Coordinator) deployNode(
 	}
 
 	return nil
+}
+
+// updateRuntimePortsFromContainer populates RuntimeContext ports from a running container
+func (c *Coordinator) updateRuntimePortsFromContainer(runtimeCtx *RuntimeContext, nodeID string, container *interfaces.ContainerState) {
+	for portKey, hostPort := range container.PortBindings {
+		// portKey is like "5432/tcp"
+		port, _ := strconv.Atoi(strings.Split(portKey, "/")[0])
+		hostPortInt, _ := strconv.Atoi(hostPort)
+		runtimeCtx.AssignedPorts[nodeID] = PortAssignment{
+			HostPort:      hostPortInt,
+			ContainerPort: port,
+		}
+		break // Only need the first port
+	}
 }
 
 // waitForRunning waits for a container to reach running status
@@ -370,13 +484,11 @@ func (c *Coordinator) buildContainerConfig(
 	// Container name: cyan-{projectID}-{nodeID}
 	containerName := fmt.Sprintf("cyan-%s-%s", runtimeCtx.ProjectID, node.ID)
 
-	// Port mapping
+	// Port mapping: containerPort -> "" for ephemeral host port binding
 	ports := make(map[string]string)
-	if portAssign, ok := runtimeCtx.AssignedPorts[node.ID]; ok && portAssign.HostPort > 0 {
-		// Map host port to container port
-		hostPort := fmt.Sprintf("%d", portAssign.HostPort)
+	if portAssign, ok := runtimeCtx.AssignedPorts[node.ID]; ok && portAssign.ContainerPort > 0 {
 		containerPort := fmt.Sprintf("%d", portAssign.ContainerPort)
-		ports[hostPort] = containerPort
+		ports[containerPort] = "" // Empty string signals ephemeral port allocation
 	}
 
 	// Labels for management
@@ -443,19 +555,40 @@ func (c *Coordinator) buildContainerConfig(
 	}
 }
 
-// runLifecycleHooks executes migration hooks
+// runLifecycleHooks executes post_install and migration hooks
 func (c *Coordinator) runLifecycleHooks(
 	ctx context.Context,
 	node NodeState,
 	containerID string,
 	runtimeCtx *RuntimeContext,
+	runPostInstall bool,
 ) error {
 	pluginConfig := runtimeCtx.PluginConfigs[node.PluginID]
 	if pluginConfig == nil {
 		return nil
 	}
 
-	// Run migration if defined
+	// Run post_install only on fresh creation
+	if runPostInstall && pluginConfig.Lifecycle.PostInstall != nil {
+		timeout := pluginConfig.Lifecycle.PostInstall.Timeout.Duration
+		if timeout == 0 {
+			timeout = 2 * time.Minute
+		}
+
+		hookCtx, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+
+		var output bytes.Buffer
+		exitCode, err := c.driver.Exec(hookCtx, containerID, pluginConfig.Lifecycle.PostInstall.Command, &output)
+		if err != nil {
+			return fmt.Errorf("running post_install: %w", err)
+		}
+		if exitCode != 0 {
+			return fmt.Errorf("post_install exited with code %d: %s", exitCode, output.String())
+		}
+	}
+
+	// Run migration on both create and update
 	if pluginConfig.Lifecycle.Migration != nil {
 		timeout := pluginConfig.Lifecycle.Migration.Timeout.Duration
 		if timeout == 0 {
@@ -465,12 +598,13 @@ func (c *Coordinator) runLifecycleHooks(
 		hookCtx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
 
-		exitCode, err := c.driver.Exec(hookCtx, containerID, pluginConfig.Lifecycle.Migration.Command)
+		var output bytes.Buffer
+		exitCode, err := c.driver.Exec(hookCtx, containerID, pluginConfig.Lifecycle.Migration.Command, &output)
 		if err != nil {
 			return fmt.Errorf("running migration: %w", err)
 		}
 		if exitCode != 0 {
-			return fmt.Errorf("migration exited with code %d", exitCode)
+			return fmt.Errorf("migration exited with code %d: %s", exitCode, output.String())
 		}
 	}
 

@@ -12,6 +12,9 @@ inputs:
     accepts: com.cyanstack.postgres
     env_mapping:
       DATABASE_URL: CONNECTION_STRING
+  - id: APP_CONFIG
+    type: secret
+    inject_as: APP_CONFIG
 
 lifecycle:
   start_command: ["sleep", "infinity"]
