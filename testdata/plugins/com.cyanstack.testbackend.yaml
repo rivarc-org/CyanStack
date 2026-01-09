@@ -1,0 +1,23 @@
+id: com.cyanstack.testbackend
+version: "1.0.0"
+name: "Test Backend"
+category: worker
+
+inputs:
+  - id: INTERNAL_PORT
+    type: port
+    inject_as: PORT
+  - id: MAIN_DATABASE
+    type: plugin
+    accepts: com.cyanstack.postgres
+    env_mapping:
+      DATABASE_URL: CONNECTION_STRING
+
+lifecycle:
+  start_command: ["sleep", "infinity"]
+  health_check:
+    path: ""
+
+exports:
+  - key: API_URL
+    value: "{{EXTERNAL_URL}}"
