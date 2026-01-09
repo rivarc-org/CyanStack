@@ -2,35 +2,16 @@ package orchestrator
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/cyanstack/cyanstack/internal/config"
 )
 
-// mockSecretStore implements SecretStore for testing
-type mockSecretStore struct {
-	secrets map[string]string // "projectID:pluginID:keyName" -> value
-}
+// mockCrypto implements Crypto for testing
+type mockCrypto struct{}
 
-func newMockSecretStore() *mockSecretStore {
-	return &mockSecretStore{
-		secrets: make(map[string]string),
-	}
-}
-
-func (m *mockSecretStore) Get(ctx context.Context, projectID, pluginID, keyName string) (string, error) {
-	key := fmt.Sprintf("%s:%s:%s", projectID, pluginID, keyName)
-	if val, ok := m.secrets[key]; ok {
-		return val, nil
-	}
-	return "", fmt.Errorf("secret not found")
-}
-
-func (m *mockSecretStore) Set(ctx context.Context, projectID, pluginID, keyName, value string) error {
-	key := fmt.Sprintf("%s:%s:%s", projectID, pluginID, keyName)
-	m.secrets[key] = value
-	return nil
+func (m *mockCrypto) DecryptFromJSON(value string) (string, error) {
+	return value, nil
 }
 
 func TestEnvResolver_PortInput(t *testing.T) {
@@ -132,8 +113,8 @@ func TestEnvResolver_SecretInput_UserProvided(t *testing.T) {
 		Lifecycle: config.Lifecycle{StartCommand: []string{"start"}},
 	})
 
-	secretStore := newMockSecretStore()
-	resolver := NewEnvResolver(secretStore, pluginLoader, NewSimplePortAllocator())
+	crypto := &mockCrypto{}
+	resolver := NewEnvResolver(crypto, pluginLoader, NewSimplePortAllocator())
 	runtimeCtx := NewRuntimeContext("proj-1", "testproject", "rev-1")
 
 	node := NodeState{
@@ -168,8 +149,8 @@ func TestEnvResolver_SecretInput_Generated(t *testing.T) {
 		Lifecycle: config.Lifecycle{StartCommand: []string{"start"}},
 	})
 
-	secretStore := newMockSecretStore()
-	resolver := NewEnvResolver(secretStore, pluginLoader, NewSimplePortAllocator())
+	crypto := &mockCrypto{}
+	resolver := NewEnvResolver(crypto, pluginLoader, NewSimplePortAllocator())
 	runtimeCtx := NewRuntimeContext("proj-1", "testproject", "rev-1")
 
 	node := NodeState{
@@ -188,12 +169,6 @@ func TestEnvResolver_SecretInput_Generated(t *testing.T) {
 	if env["POSTGRES_PASSWORD"] == "" {
 		t.Error("expected generated password")
 	}
-
-	// Password should be stored in secret store
-	stored, _ := secretStore.Get(context.Background(), "proj-1", "com.test.db", "DB_PASSWORD")
-	if stored != env["POSTGRES_PASSWORD"] {
-		t.Error("generated password should be stored in secret store")
-	}
 }
 
 func TestEnvResolver_SecretInput_NotFoundNoGenerate(t *testing.T) {
@@ -209,8 +184,8 @@ func TestEnvResolver_SecretInput_NotFoundNoGenerate(t *testing.T) {
 		Lifecycle: config.Lifecycle{StartCommand: []string{"start"}},
 	})
 
-	secretStore := newMockSecretStore()
-	resolver := NewEnvResolver(secretStore, pluginLoader, NewSimplePortAllocator())
+	crypto := &mockCrypto{}
+	resolver := NewEnvResolver(crypto, pluginLoader, NewSimplePortAllocator())
 	runtimeCtx := NewRuntimeContext("proj-1", "testproject", "rev-1")
 
 	node := NodeState{
@@ -265,9 +240,9 @@ func TestEnvResolver_PluginInput(t *testing.T) {
 		Lifecycle: config.Lifecycle{StartCommand: []string{"start"}},
 	})
 
-	secretStore := newMockSecretStore()
+	crypto := &mockCrypto{}
 	portAllocator := NewSimplePortAllocator()
-	resolver := NewEnvResolver(secretStore, pluginLoader, portAllocator)
+	resolver := NewEnvResolver(crypto, pluginLoader, portAllocator)
 	runtimeCtx := NewRuntimeContext("proj-1", "testproject", "rev-1")
 
 	// First, resolve postgres node
