@@ -1,0 +1,26 @@
+id: com.cyanstack.postgres
+version: "1.0.0"
+name: "PostgreSQL Database"
+category: stateful
+
+inputs:
+  - id: INTERNAL_PORT
+    type: port
+    default: "5432"
+    inject_as: ""
+  - id: DB_PASSWORD
+    type: secret
+    inject_as: POSTGRES_PASSWORD
+    generate: true
+  - id: DB_NAME
+    type: secret
+    inject_as: POSTGRES_DB
+
+lifecycle:
+  start_command: ["postgres"]
+  health_check:
+    port: "5432"
+
+exports:
+  - key: CONNECTION_STRING
+    value: "postgresql://postgres:{{DB_PASSWORD}}@{{INTERNAL_HOST}}:{{INTERNAL_PORT}}/{{DB_NAME}}"

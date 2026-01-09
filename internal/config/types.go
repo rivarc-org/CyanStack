@@ -30,6 +30,7 @@ type InputDefinition struct {
 	Type       string            `yaml:"type"`                  // "port", "secret", "plugin"
 	InjectAs   string            `yaml:"inject_as"`
 	Generated  bool              `yaml:"generate,omitempty"`
+	Default    string            `yaml:"default,omitempty"`     // Default value (e.g., "5432" for fixed ports)
 	Accepts    string            `yaml:"accepts,omitempty"`     // For plugin type inputs
 	EnvMapping map[string]string `yaml:"env_mapping,omitempty"` // Environment variable mapping
 }

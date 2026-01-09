@@ -1,0 +1,33 @@
+id: com.medusajs.backend
+version: "2.1.0"
+name: "Medusa E-Commerce Backend"
+category: worker
+
+inputs:
+  - id: INTERNAL_PORT
+    type: port
+    inject_as: PORT
+  - id: JWT_SECRET
+    type: secret
+    generate: true
+    inject_as: JWT_SECRET
+  - id: MAIN_DATABASE
+    type: plugin
+    accepts: com.cyanstack.postgres
+    env_mapping:
+      DATABASE_URL: CONNECTION_STRING
+
+lifecycle:
+  start_command: ["medusa", "start"]
+  health_check:
+    path: "/health"
+  post_install:
+    command: ["medusa", "seed", "--seed-file=data/seed.json"]
+    timeout: 300s
+  migration:
+    command: ["medusa", "migrations", "run"]
+    timeout: 120s
+
+exports:
+  - key: API_URL
+    value: "{{EXTERNAL_URL}}"
