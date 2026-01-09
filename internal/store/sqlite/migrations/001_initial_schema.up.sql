@@ -20,17 +20,3 @@ CREATE TABLE IF NOT EXISTS revisions (
 
 CREATE INDEX IF NOT EXISTS idx_revisions_project_id ON revisions(project_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_revisions_project_version ON revisions(project_id, version_number);
-
--- Project secrets table (encrypted values)
-CREATE TABLE IF NOT EXISTS project_secrets (
-    project_id TEXT NOT NULL,
-    plugin_id TEXT NOT NULL,
-    key_name TEXT NOT NULL,
-    encrypted_value TEXT NOT NULL,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (project_id, plugin_id, key_name),
-    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
-);
-
-CREATE INDEX IF NOT EXISTS idx_project_secrets_project_id ON project_secrets(project_id);

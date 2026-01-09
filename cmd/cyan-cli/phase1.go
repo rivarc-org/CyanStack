@@ -224,7 +224,7 @@ var volumeTestCmd = &cobra.Command{
 				"POSTGRES_DB":       "testdb",
 			},
 			Ports: map[string]string{
-				"5433": "5432",
+				"5432": "",
 			},
 			Volumes: map[string]string{
 				testDataPath: "/var/lib/postgresql/data",

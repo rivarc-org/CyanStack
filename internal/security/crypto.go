@@ -7,7 +7,11 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"strings"
 )
+
+// SecretPrefix is the marker for encrypted values in JSON
+const SecretPrefix = "SECRET:"
 
 // AESCrypto provides AES-256-GCM encryption and decryption
 type AESCrypto struct {
@@ -98,4 +102,24 @@ func (c *AESCrypto) DecryptString(ciphertext string) (string, error) {
 		return "", err
 	}
 	return string(decrypted), nil
+}
+
+// EncryptForJSON encrypts a value and returns it with SECRET: prefix for JSON embedding
+func (c *AESCrypto) EncryptForJSON(plaintext string) (string, error) {
+	encrypted, err := c.EncryptString(plaintext)
+	if err != nil {
+		return "", err
+	}
+	return SecretPrefix + encrypted, nil
+}
+
+// DecryptFromJSON decrypts a SECRET:-prefixed value, or returns raw value if not encrypted
+func (c *AESCrypto) DecryptFromJSON(value string) (string, error) {
+	if !strings.HasPrefix(value, SecretPrefix) {
+		// Not encrypted, return as-is (dev mode / raw value)
+		return value, nil
+	}
+
+	ciphertext := strings.TrimPrefix(value, SecretPrefix)
+	return c.DecryptString(ciphertext)
 }

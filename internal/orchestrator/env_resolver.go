@@ -14,27 +14,26 @@ import (
 // templatePattern matches {{VARIABLE_NAME}} patterns
 var templatePattern = regexp.MustCompile(`\{\{([A-Z_][A-Z0-9_]*)\}\}`)
 
-// SecretStore defines the interface for secret retrieval and storage
-type SecretStore interface {
-	Get(ctx context.Context, projectID, pluginID, keyName string) (string, error)
-	Set(ctx context.Context, projectID, pluginID, keyName, value string) error
+// Crypto defines the interface for decrypting secrets from JSON
+type Crypto interface {
+	DecryptFromJSON(value string) (string, error)
 }
 
 // EnvResolver resolves environment variables for nodes
 type EnvResolver struct {
-	secretStore   SecretStore
+	crypto        Crypto
 	pluginLoader  PluginLoader
 	portAllocator PortAllocator
 }
 
 // NewEnvResolver creates a new environment resolver
 func NewEnvResolver(
-	secretStore SecretStore,
+	crypto Crypto,
 	pluginLoader PluginLoader,
 	portAllocator PortAllocator,
 ) *EnvResolver {
 	return &EnvResolver{
-		secretStore:   secretStore,
+		crypto:        crypto,
 		pluginLoader:  pluginLoader,
 		portAllocator: portAllocator,
 	}
@@ -166,6 +165,7 @@ func (r *EnvResolver) resolvePortInput(
 }
 
 // resolveSecretInput handles type: secret inputs
+// Secrets are now embedded directly in the Revision JSON (encrypted with SECRET: prefix)
 func (r *EnvResolver) resolveSecretInput(
 	ctx context.Context,
 	node NodeState,
@@ -175,38 +175,29 @@ func (r *EnvResolver) resolveSecretInput(
 ) error {
 	var secret string
 
-	// Check if value provided in node inputs (user override)
-	if userValue, ok := node.Inputs[inputDef.ID]; ok && userValue != "" {
-		secret = userValue
-		// Store for future reference
-		if r.secretStore != nil {
-			if err := r.secretStore.Set(ctx, runtimeCtx.ProjectID, node.PluginID, inputDef.ID, userValue); err != nil {
-				// Log but don't fail - user value will still be used
-			}
-		}
-	} else if r.secretStore != nil {
-		// Try to fetch existing secret
-		var err error
-		secret, err = r.secretStore.Get(ctx, runtimeCtx.ProjectID, node.PluginID, inputDef.ID)
-		if err != nil {
-			// Secret doesn't exist, will try to generate
-			secret = ""
-		}
-	}
+	// Read value from node inputs (JSON)
+	rawValue := node.Inputs[inputDef.ID]
 
-	// Generate if not found and generation is enabled
-	if secret == "" && inputDef.Generated {
+	if rawValue != "" {
+		// Decrypt if encrypted, use as-is if raw (dev mode)
+		if r.crypto != nil {
+			decrypted, err := r.crypto.DecryptFromJSON(rawValue)
+			if err != nil {
+				return fmt.Errorf("decrypting secret: %w", err)
+			}
+			secret = decrypted
+		} else {
+			secret = rawValue
+		}
+	} else if inputDef.Generated {
+		// Generate ephemeral secret (warning: won't persist in CLI mode)
 		var err error
 		secret, err = generateSecureSecret(32)
 		if err != nil {
 			return fmt.Errorf("generating secret: %w", err)
 		}
-		// Store the generated secret
-		if r.secretStore != nil {
-			if err := r.secretStore.Set(ctx, runtimeCtx.ProjectID, node.PluginID, inputDef.ID, secret); err != nil {
-				return fmt.Errorf("storing generated secret: %w", err)
-			}
-		}
+		// Note: In CLI mode, generated secrets are ephemeral
+		// The API will pre-encrypt and embed secrets before creating revisions
 	}
 
 	if secret == "" {

@@ -64,14 +64,12 @@ var cycleTestCmd = &cobra.Command{
 		}
 		fmt.Printf("Database: %s\n", db.Path())
 
-		// Initialize crypto for secrets
+		// Initialize crypto for secrets (embedded in JSON)
 		ks := security.NewKeyStore("")
 		crypto, err := ks.NewCrypto()
 		if err != nil {
 			return fmt.Errorf("failed to create crypto: %w", err)
 		}
-
-		secretRepo := sqlite.NewSecretRepository(db, crypto)
 
 		// Find testdata/plugins directory
 		testdataPaths := []string{
@@ -98,7 +96,7 @@ var cycleTestCmd = &cobra.Command{
 		traefikGen := local.NewTraefikGenerator()
 
 		envResolver := orchestrator.NewEnvResolver(
-			&secretStoreAdapter{repo: secretRepo},
+			crypto,
 			pluginLoader,
 			portAllocator,
 		)

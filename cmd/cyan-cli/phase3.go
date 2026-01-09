@@ -19,19 +19,6 @@ import (
 	"github.com/cyanstack/cyanstack/internal/store/sqlite"
 )
 
-// secretStoreAdapter wraps sqlite.SecretRepository to implement orchestrator.SecretStore
-type secretStoreAdapter struct {
-	repo *sqlite.SecretRepository
-}
-
-func (s *secretStoreAdapter) Get(ctx context.Context, projectID, pluginID, keyName string) (string, error) {
-	return s.repo.Get(ctx, projectID, pluginID, keyName)
-}
-
-func (s *secretStoreAdapter) Set(ctx context.Context, projectID, pluginID, keyName, value string) error {
-	return s.repo.Set(ctx, projectID, pluginID, keyName, value)
-}
-
 var deployTestCmd = &cobra.Command{
 	Use:   "deploy-test",
 	Short: "Test Phase 3 deployment with mock 2-node stack (Step 3.3 validation)",
@@ -79,15 +66,13 @@ var deployTestCmd = &cobra.Command{
 		}
 		fmt.Printf("Database: %s\n", db.Path())
 
-		// Initialize crypto for secrets
+		// Initialize crypto for secrets (embedded in JSON)
 		ks := security.NewKeyStore("")
 		crypto, err := ks.NewCrypto()
 		if err != nil {
 			return fmt.Errorf("failed to create crypto: %w", err)
 		}
-
-		secretRepo := sqlite.NewSecretRepository(db, crypto)
-		fmt.Println("Secret repository initialized")
+		fmt.Println("Crypto initialized")
 
 		// 3. Setup orchestrator components
 		fmt.Println("\n--- Step 3: Setup orchestrator ---")
@@ -121,7 +106,7 @@ var deployTestCmd = &cobra.Command{
 		traefikGen := local.NewTraefikGenerator()
 
 		envResolver := orchestrator.NewEnvResolver(
-			&secretStoreAdapter{repo: secretRepo},
+			crypto,
 			pluginLoader,
 			portAllocator,
 		)
@@ -170,6 +155,7 @@ var deployTestCmd = &cobra.Command{
 					Image:    "alpine:latest", // Use alpine for testing (just needs to run)
 					Inputs: map[string]string{
 						"MAIN_DATABASE": "node-postgres-1",
+					"APP_CONFIG":    "test-app-config-value",
 					},
 				},
 			},
