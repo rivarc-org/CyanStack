@@ -11,17 +11,23 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// DeployCoordinator defines the interface for deployment orchestration
+type DeployCoordinator interface {
+	Deploy(ctx context.Context, revisionID string) (*orchestrator.DeployResult, error)
+	StopProject(ctx context.Context, projectID string) error
+}
+
 // DeployHandler handles deployment-related API requests
 type DeployHandler struct {
 	projectRepo *sqlite.ProjectRepository
-	coordinator *orchestrator.Coordinator
+	coordinator DeployCoordinator
 	eventBus    *events.InMemoryEventBus
 }
 
 // NewDeployHandler creates a new DeployHandler
 func NewDeployHandler(
 	projectRepo *sqlite.ProjectRepository,
-	coordinator *orchestrator.Coordinator,
+	coordinator DeployCoordinator,
 	eventBus *events.InMemoryEventBus,
 ) *DeployHandler {
 	return &DeployHandler{

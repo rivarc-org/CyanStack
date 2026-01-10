@@ -95,6 +95,20 @@ func (h *ProjectHandler) Create(c *gin.Context) {
 		return
 	}
 
+	// Create project first (foreign key requires project to exist before revision)
+	project := &sqlite.Project{
+		ID:   projectID,
+		Name: req.Name,
+	}
+
+	if err := h.projectRepo.Create(c.Request.Context(), project); err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewErrorResponse(
+			"Failed to create project",
+			dto.ErrCodeInternal,
+		))
+		return
+	}
+
 	// Create initial revision
 	revision := &sqlite.Revision{
 		ID:            revisionID,
@@ -104,6 +118,9 @@ func (h *ProjectHandler) Create(c *gin.Context) {
 	}
 
 	if err := h.revisionRepo.Create(c.Request.Context(), revision); err != nil {
+		// Try to clean up the project
+		_ = h.projectRepo.Delete(c.Request.Context(), projectID)
+
 		c.JSON(http.StatusInternalServerError, dto.NewErrorResponse(
 			"Failed to create initial revision",
 			dto.ErrCodeInternal,
@@ -111,19 +128,10 @@ func (h *ProjectHandler) Create(c *gin.Context) {
 		return
 	}
 
-	// Create project with revision reference
-	project := &sqlite.Project{
-		ID:                projectID,
-		Name:              req.Name,
-		CurrentRevisionID: &revisionID,
-	}
-
-	if err := h.projectRepo.Create(c.Request.Context(), project); err != nil {
-		// Try to clean up the revision
-		_ = h.revisionRepo.Delete(c.Request.Context(), revisionID)
-
+	// Update project with revision reference
+	if err := h.projectRepo.SetCurrentRevision(c.Request.Context(), projectID, revisionID); err != nil {
 		c.JSON(http.StatusInternalServerError, dto.NewErrorResponse(
-			"Failed to create project",
+			"Failed to set current revision",
 			dto.ErrCodeInternal,
 		))
 		return
