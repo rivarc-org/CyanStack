@@ -32,6 +32,9 @@ func init() {
 
 	// Meta commands
 	rootCmd.AddCommand(testAllCmd)
+
+	// Phase 5 commands
+	rootCmd.AddCommand(serveCmd)
 }
 
 func main() {
