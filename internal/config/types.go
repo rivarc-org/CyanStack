@@ -19,6 +19,7 @@ type PluginConfig struct {
 	Version   string             `yaml:"version"`
 	Name      string             `yaml:"name"`
 	Category  PluginCategory     `yaml:"category"`
+	Image     string             `yaml:"image"` // Docker image for this plugin
 	Inputs    []InputDefinition  `yaml:"inputs"`
 	Lifecycle Lifecycle          `yaml:"lifecycle"`
 	Exports   []ExportDefinition `yaml:"exports,omitempty"`

@@ -86,9 +86,9 @@ func (s *Server) setupRoutes() {
 	// Revision routes
 	revisionHandler := handlers.NewRevisionHandler(s.revisionRepo, s.projectRepo)
 	v1.GET("/projects/:id/revisions", revisionHandler.List)
-	v1.GET("/projects/:id/revisions/latest", revisionHandler.GetLatest)
 	v1.GET("/projects/:id/revisions/:rev_id", revisionHandler.Get)
 	v1.POST("/projects/:id/revisions", revisionHandler.Create)
+	v1.DELETE("/projects/:id/revisions/:rev_id", revisionHandler.Delete)
 
 	// Crypto routes
 	cryptoHandler := handlers.NewCryptoHandler(s.crypto)
@@ -97,7 +97,7 @@ func (s *Server) setupRoutes() {
 	v1.POST("/crypto/generate", cryptoHandler.Generate)
 
 	// Deploy routes
-	deployHandler := handlers.NewDeployHandler(s.projectRepo, s.coordinator, s.eventBus)
+	deployHandler := handlers.NewDeployHandler(s.projectRepo, s.revisionRepo, s.coordinator, s.eventBus)
 	v1.POST("/projects/:id/deploy", deployHandler.Deploy)
 	v1.POST("/projects/:id/stop", deployHandler.Stop)
 

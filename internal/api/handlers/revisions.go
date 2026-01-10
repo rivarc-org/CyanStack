@@ -64,68 +64,9 @@ func (h *RevisionHandler) List(c *gin.Context) {
 		response[i] = dto.RevisionSummary{
 			ID:            r.ID,
 			VersionNumber: r.VersionNumber,
+			IsDraft:       r.IsDraft,
 			CreatedAt:     r.CreatedAt,
 		}
-	}
-
-	c.JSON(http.StatusOK, response)
-}
-
-// GetLatest returns the latest revision for a project (with full graph_state)
-func (h *RevisionHandler) GetLatest(c *gin.Context) {
-	projectID := c.Param("id")
-
-	// Verify project exists
-	project, err := h.projectRepo.GetByID(c.Request.Context(), projectID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, dto.NewErrorResponse(
-			"Failed to get project",
-			dto.ErrCodeInternal,
-		))
-		return
-	}
-
-	if project == nil {
-		c.JSON(http.StatusNotFound, dto.NewErrorResponse(
-			"Project not found",
-			dto.ErrCodeNotFound,
-		))
-		return
-	}
-
-	revision, err := h.revisionRepo.GetLatest(c.Request.Context(), projectID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, dto.NewErrorResponse(
-			"Failed to get latest revision",
-			dto.ErrCodeInternal,
-		))
-		return
-	}
-
-	if revision == nil {
-		c.JSON(http.StatusNotFound, dto.NewErrorResponse(
-			"No revisions found for this project",
-			dto.ErrCodeNotFound,
-		))
-		return
-	}
-
-	// Parse graph state from JSON
-	var graphState dto.GraphStateDTO
-	if err := json.Unmarshal([]byte(revision.GraphState), &graphState); err != nil {
-		c.JSON(http.StatusInternalServerError, dto.NewErrorResponse(
-			"Failed to parse graph state",
-			dto.ErrCodeInternal,
-		))
-		return
-	}
-
-	response := dto.RevisionDetailResponse{
-		ID:            revision.ID,
-		ProjectID:     revision.ProjectID,
-		VersionNumber: revision.VersionNumber,
-		GraphState:    graphState,
-		CreatedAt:     revision.CreatedAt,
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -185,6 +126,7 @@ func (h *RevisionHandler) Get(c *gin.Context) {
 		ID:            revision.ID,
 		ProjectID:     revision.ProjectID,
 		VersionNumber: revision.VersionNumber,
+		IsDraft:       revision.IsDraft,
 		GraphState:    graphState,
 		CreatedAt:     revision.CreatedAt,
 	}
@@ -243,13 +185,14 @@ func (h *RevisionHandler) Create(c *gin.Context) {
 		return
 	}
 
-	// Create new revision
+	// Create new revision (drafts by default)
 	revisionID := uuid.New().String()
 	revision := &sqlite.Revision{
 		ID:            revisionID,
 		ProjectID:     projectID,
 		VersionNumber: nextVersion,
 		GraphState:    string(graphJSON),
+		IsDraft:       true,
 	}
 
 	if err := h.revisionRepo.Create(c.Request.Context(), revision); err != nil {
@@ -276,9 +219,81 @@ func (h *RevisionHandler) Create(c *gin.Context) {
 		ID:            createdRevision.ID,
 		ProjectID:     createdRevision.ProjectID,
 		VersionNumber: createdRevision.VersionNumber,
+		IsDraft:       createdRevision.IsDraft,
 		GraphState:    req.GraphState,
 		CreatedAt:     createdRevision.CreatedAt,
 	}
 
 	c.JSON(http.StatusCreated, response)
+}
+
+// Delete removes a draft revision
+func (h *RevisionHandler) Delete(c *gin.Context) {
+	projectID := c.Param("id")
+	revisionID := c.Param("rev_id")
+
+	// Verify project exists
+	project, err := h.projectRepo.GetByID(c.Request.Context(), projectID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewErrorResponse(
+			"Failed to get project",
+			dto.ErrCodeInternal,
+		))
+		return
+	}
+
+	if project == nil {
+		c.JSON(http.StatusNotFound, dto.NewErrorResponse(
+			"Project not found",
+			dto.ErrCodeNotFound,
+		))
+		return
+	}
+
+	// Get the revision
+	revision, err := h.revisionRepo.GetByID(c.Request.Context(), revisionID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewErrorResponse(
+			"Failed to get revision",
+			dto.ErrCodeInternal,
+		))
+		return
+	}
+
+	if revision == nil || revision.ProjectID != projectID {
+		c.JSON(http.StatusNotFound, dto.NewErrorResponse(
+			"Revision not found",
+			dto.ErrCodeNotFound,
+		))
+		return
+	}
+
+	// Cannot delete the project's current revision
+	if project.CurrentRevisionID != nil && *project.CurrentRevisionID == revisionID {
+		c.JSON(http.StatusBadRequest, dto.NewErrorResponse(
+			"Cannot delete the project's current revision",
+			dto.ErrCodeValidation,
+		))
+		return
+	}
+
+	// Can only delete drafts
+	if !revision.IsDraft {
+		c.JSON(http.StatusBadRequest, dto.NewErrorResponse(
+			"Cannot delete a deployed revision",
+			dto.ErrCodeValidation,
+		))
+		return
+	}
+
+	// Delete the revision
+	if err := h.revisionRepo.Delete(c.Request.Context(), revisionID); err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewErrorResponse(
+			"Failed to delete revision",
+			dto.ErrCodeInternal,
+		))
+		return
+	}
+
+	c.Status(http.StatusNoContent)
 }

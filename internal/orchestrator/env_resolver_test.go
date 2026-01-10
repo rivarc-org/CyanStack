@@ -33,7 +33,6 @@ func TestEnvResolver_PortInput(t *testing.T) {
 	node := NodeState{
 		ID:       "node-app",
 		PluginID: "com.test.app",
-		Image:    "test:latest",
 		Inputs:   map[string]string{},
 	}
 
@@ -72,7 +71,6 @@ func TestEnvResolver_FixedPortInput(t *testing.T) {
 	node := NodeState{
 		ID:       "node-postgres",
 		PluginID: "com.test.postgres",
-		Image:    "postgres:15",
 		Inputs:   map[string]string{},
 	}
 
@@ -120,7 +118,6 @@ func TestEnvResolver_SecretInput_UserProvided(t *testing.T) {
 	node := NodeState{
 		ID:       "node-db",
 		PluginID: "com.test.db",
-		Image:    "postgres:15",
 		Inputs: map[string]string{
 			"DB_PASSWORD": "user-provided-password",
 		},
@@ -156,7 +153,6 @@ func TestEnvResolver_SecretInput_Generated(t *testing.T) {
 	node := NodeState{
 		ID:       "node-db",
 		PluginID: "com.test.db",
-		Image:    "postgres:15",
 		Inputs:   map[string]string{},
 	}
 
@@ -191,7 +187,6 @@ func TestEnvResolver_SecretInput_NotFoundNoGenerate(t *testing.T) {
 	node := NodeState{
 		ID:       "node-db",
 		PluginID: "com.test.db",
-		Image:    "postgres:15",
 		Inputs:   map[string]string{},
 	}
 
@@ -249,7 +244,6 @@ func TestEnvResolver_PluginInput(t *testing.T) {
 	postgresNode := NodeState{
 		ID:       "node-postgres",
 		PluginID: "com.test.postgres",
-		Image:    "postgres:15",
 		Inputs:   map[string]string{},
 	}
 
@@ -262,7 +256,6 @@ func TestEnvResolver_PluginInput(t *testing.T) {
 	backendNode := NodeState{
 		ID:       "node-backend",
 		PluginID: "com.test.backend",
-		Image:    "app:latest",
 		Inputs: map[string]string{
 			"MAIN_DATABASE": "node-postgres",
 		},
@@ -303,7 +296,6 @@ func TestEnvResolver_AutoExports(t *testing.T) {
 	node := NodeState{
 		ID:       "node-app",
 		PluginID: "com.test.app",
-		Image:    "test:latest",
 		Inputs:   map[string]string{},
 	}
 
@@ -402,7 +394,6 @@ func TestEnvResolver_MissingDependency(t *testing.T) {
 	backendNode := NodeState{
 		ID:       "node-backend",
 		PluginID: "com.test.backend",
-		Image:    "app:latest",
 		Inputs: map[string]string{
 			"MAIN_DATABASE": "node-postgres", // References non-existent node
 		},

@@ -16,9 +16,6 @@ type Node struct {
 	// Plugin configuration
 	PluginConfig *config.PluginConfig
 
-	// Docker image to use
-	Image string
-
 	// Runtime state
 	ContainerID string
 	Status      NodeStatus
@@ -72,12 +69,14 @@ func (n *Node) ToContainerConfig() interfaces.ContainerConfig {
 	}
 
 	var command []string
+	var image string
 	if n.PluginConfig != nil {
 		command = n.PluginConfig.Lifecycle.StartCommand
+		image = n.PluginConfig.Image
 	}
 
 	return interfaces.ContainerConfig{
-		Image:   n.Image,
+		Image:   image,
 		Name:    n.ID,
 		Env:     n.ResolvedEnv,
 		Ports:   ports,

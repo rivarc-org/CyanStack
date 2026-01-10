@@ -2,6 +2,7 @@ id: com.cyanstack.postgres
 version: "1.0.0"
 name: "PostgreSQL Database"
 category: stateful
+image: postgres:16
 
 inputs:
   - id: INTERNAL_PORT

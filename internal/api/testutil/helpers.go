@@ -117,11 +117,17 @@ func CreateTestProjectWithRevision(t *testing.T, db *sqlite.DB, projectID, proje
 
 // CreateTestRevision creates a revision fixture in the database
 func CreateTestRevision(t *testing.T, db *sqlite.DB, id, projectID string, version int, graphState string) *sqlite.Revision {
+	return CreateTestRevisionWithDraft(t, db, id, projectID, version, graphState, true)
+}
+
+// CreateTestRevisionWithDraft creates a revision fixture with explicit draft flag
+func CreateTestRevisionWithDraft(t *testing.T, db *sqlite.DB, id, projectID string, version int, graphState string, isDraft bool) *sqlite.Revision {
 	revision := &sqlite.Revision{
 		ID:            id,
 		ProjectID:     projectID,
 		VersionNumber: version,
 		GraphState:    graphState,
+		IsDraft:       isDraft,
 		CreatedAt:     time.Now(),
 	}
 	repo := sqlite.NewRevisionRepository(db)

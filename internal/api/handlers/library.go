@@ -161,6 +161,7 @@ func (h *LibraryHandler) Get(c *gin.Context) {
 		Name:     pluginConfig.Name,
 		Version:  pluginConfig.Version,
 		Category: string(pluginConfig.Category),
+		Image:    pluginConfig.Image,
 		Inputs:   inputs,
 		Exports:  exports,
 	}

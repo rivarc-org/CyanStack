@@ -63,12 +63,13 @@ func TestDeployHandler_Deploy_Success(t *testing.T) {
 	testutil.CreateTestProjectWithRevision(t, db, "proj-1", "Test Project", "rev-1")
 
 	projectRepo := sqlite.NewProjectRepository(db)
+	revisionRepo := sqlite.NewRevisionRepository(db)
 	eventBus := events.NewInMemoryEventBus()
 	defer eventBus.Close()
 
 	coordinator := &mockCoordinator{}
 
-	handler := handlers.NewDeployHandler(projectRepo, coordinator, eventBus)
+	handler := handlers.NewDeployHandler(projectRepo, revisionRepo, coordinator, eventBus)
 	router := testutil.SetupTestRouter()
 	router.POST("/api/v1/projects/:id/deploy", handler.Deploy)
 
@@ -96,12 +97,13 @@ func TestDeployHandler_Deploy_ProjectNotFound(t *testing.T) {
 	defer cleanup()
 
 	projectRepo := sqlite.NewProjectRepository(db)
+	revisionRepo := sqlite.NewRevisionRepository(db)
 	eventBus := events.NewInMemoryEventBus()
 	defer eventBus.Close()
 
 	coordinator := &mockCoordinator{}
 
-	handler := handlers.NewDeployHandler(projectRepo, coordinator, eventBus)
+	handler := handlers.NewDeployHandler(projectRepo, revisionRepo, coordinator, eventBus)
 	router := testutil.SetupTestRouter()
 	router.POST("/api/v1/projects/:id/deploy", handler.Deploy)
 
@@ -125,12 +127,13 @@ func TestDeployHandler_Deploy_NoCurrentRevision(t *testing.T) {
 	testutil.CreateTestProject(t, db, "proj-no-rev", "No Revision Project")
 
 	projectRepo := sqlite.NewProjectRepository(db)
+	revisionRepo := sqlite.NewRevisionRepository(db)
 	eventBus := events.NewInMemoryEventBus()
 	defer eventBus.Close()
 
 	coordinator := &mockCoordinator{}
 
-	handler := handlers.NewDeployHandler(projectRepo, coordinator, eventBus)
+	handler := handlers.NewDeployHandler(projectRepo, revisionRepo, coordinator, eventBus)
 	router := testutil.SetupTestRouter()
 	router.POST("/api/v1/projects/:id/deploy", handler.Deploy)
 
@@ -155,12 +158,13 @@ func TestDeployHandler_Deploy_CustomRevision(t *testing.T) {
 	testutil.CreateTestRevision(t, db, "rev-2", "proj-1", 2, `{"nodes":[]}`)
 
 	projectRepo := sqlite.NewProjectRepository(db)
+	revisionRepo := sqlite.NewRevisionRepository(db)
 	eventBus := events.NewInMemoryEventBus()
 	defer eventBus.Close()
 
 	coordinator := &mockCoordinator{}
 
-	handler := handlers.NewDeployHandler(projectRepo, coordinator, eventBus)
+	handler := handlers.NewDeployHandler(projectRepo, revisionRepo, coordinator, eventBus)
 	router := testutil.SetupTestRouter()
 	router.POST("/api/v1/projects/:id/deploy", handler.Deploy)
 
@@ -188,12 +192,13 @@ func TestDeployHandler_Deploy_PublishesEvents(t *testing.T) {
 	testutil.CreateTestProjectWithRevision(t, db, "proj-1", "Test Project", "rev-1")
 
 	projectRepo := sqlite.NewProjectRepository(db)
+	revisionRepo := sqlite.NewRevisionRepository(db)
 	eventBus := events.NewInMemoryEventBus()
 	defer eventBus.Close()
 
 	coordinator := &mockCoordinator{}
 
-	handler := handlers.NewDeployHandler(projectRepo, coordinator, eventBus)
+	handler := handlers.NewDeployHandler(projectRepo, revisionRepo, coordinator, eventBus)
 	router := testutil.SetupTestRouter()
 	router.POST("/api/v1/projects/:id/deploy", handler.Deploy)
 
@@ -232,12 +237,13 @@ func TestDeployHandler_Stop_Success(t *testing.T) {
 	testutil.CreateTestProjectWithRevision(t, db, "proj-1", "Test Project", "rev-1")
 
 	projectRepo := sqlite.NewProjectRepository(db)
+	revisionRepo := sqlite.NewRevisionRepository(db)
 	eventBus := events.NewInMemoryEventBus()
 	defer eventBus.Close()
 
 	coordinator := &mockCoordinator{}
 
-	handler := handlers.NewDeployHandler(projectRepo, coordinator, eventBus)
+	handler := handlers.NewDeployHandler(projectRepo, revisionRepo, coordinator, eventBus)
 	router := testutil.SetupTestRouter()
 	router.POST("/api/v1/projects/:id/stop", handler.Stop)
 
@@ -258,12 +264,13 @@ func TestDeployHandler_Stop_ProjectNotFound(t *testing.T) {
 	defer cleanup()
 
 	projectRepo := sqlite.NewProjectRepository(db)
+	revisionRepo := sqlite.NewRevisionRepository(db)
 	eventBus := events.NewInMemoryEventBus()
 	defer eventBus.Close()
 
 	coordinator := &mockCoordinator{}
 
-	handler := handlers.NewDeployHandler(projectRepo, coordinator, eventBus)
+	handler := handlers.NewDeployHandler(projectRepo, revisionRepo, coordinator, eventBus)
 	router := testutil.SetupTestRouter()
 	router.POST("/api/v1/projects/:id/stop", handler.Stop)
 
@@ -285,6 +292,7 @@ func TestDeployHandler_Stop_CoordinatorError(t *testing.T) {
 	testutil.CreateTestProjectWithRevision(t, db, "proj-1", "Test Project", "rev-1")
 
 	projectRepo := sqlite.NewProjectRepository(db)
+	revisionRepo := sqlite.NewRevisionRepository(db)
 	eventBus := events.NewInMemoryEventBus()
 	defer eventBus.Close()
 
@@ -294,7 +302,7 @@ func TestDeployHandler_Stop_CoordinatorError(t *testing.T) {
 		},
 	}
 
-	handler := handlers.NewDeployHandler(projectRepo, coordinator, eventBus)
+	handler := handlers.NewDeployHandler(projectRepo, revisionRepo, coordinator, eventBus)
 	router := testutil.SetupTestRouter()
 	router.POST("/api/v1/projects/:id/stop", handler.Stop)
 
@@ -314,6 +322,7 @@ func TestDeployHandler_Deploy_FailedDeployment(t *testing.T) {
 	testutil.CreateTestProjectWithRevision(t, db, "proj-1", "Test Project", "rev-1")
 
 	projectRepo := sqlite.NewProjectRepository(db)
+	revisionRepo := sqlite.NewRevisionRepository(db)
 	eventBus := events.NewInMemoryEventBus()
 	defer eventBus.Close()
 
@@ -323,7 +332,7 @@ func TestDeployHandler_Deploy_FailedDeployment(t *testing.T) {
 		},
 	}
 
-	handler := handlers.NewDeployHandler(projectRepo, coordinator, eventBus)
+	handler := handlers.NewDeployHandler(projectRepo, revisionRepo, coordinator, eventBus)
 	router := testutil.SetupTestRouter()
 	router.POST("/api/v1/projects/:id/deploy", handler.Deploy)
 

@@ -309,10 +309,12 @@ func (c *Coordinator) deployNode(
 	// 3. Compute config hash for idempotency
 	pluginConfig := runtimeCtx.PluginConfigs[node.PluginID]
 	var command []string
+	var pluginImage string
 	if pluginConfig != nil {
 		command = pluginConfig.Lifecycle.StartCommand
+		pluginImage = pluginConfig.Image
 	}
-	configHash := ComputeConfigHash(node.Image, env, command)
+	configHash := ComputeConfigHash(pluginImage, env, command)
 	containerConfig.Labels[ConfigHashLabel] = configHash
 
 	// 4. Check for existing container
@@ -536,14 +538,16 @@ func (c *Coordinator) buildContainerConfig(
 		},
 	}
 
-	// Get start command from plugin config
+	// Get start command and image from plugin config
 	var command []string
+	var pluginImage string
 	if pluginConfig != nil {
 		command = pluginConfig.Lifecycle.StartCommand
+		pluginImage = pluginConfig.Image
 	}
 
 	return interfaces.ContainerConfig{
-		Image:          node.Image,
+		Image:          pluginImage,
 		Name:           containerName,
 		Env:            env,
 		Ports:          ports,

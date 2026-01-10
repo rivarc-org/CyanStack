@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS revisions (
     project_id TEXT NOT NULL,
     version_number INTEGER NOT NULL,
     graph_state TEXT NOT NULL,
+    is_draft INTEGER NOT NULL DEFAULT 1,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
 );

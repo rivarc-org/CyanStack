@@ -24,7 +24,7 @@ func TestDAGResolver_SingleNode(t *testing.T) {
 	resolver := NewDAGResolver()
 	graph := GraphState{
 		Nodes: []NodeState{
-			{ID: "node-a", PluginID: "com.test.a", Image: "test:latest", Inputs: map[string]string{}},
+			{ID: "node-a", PluginID: "com.test.a", Inputs: map[string]string{}},
 		},
 	}
 
@@ -48,9 +48,9 @@ func TestDAGResolver_LinearChain(t *testing.T) {
 	resolver := NewDAGResolver()
 	graph := GraphState{
 		Nodes: []NodeState{
-			{ID: "node-c", PluginID: "com.test.c", Image: "test:latest", Inputs: map[string]string{"dep": "node-b"}},
-			{ID: "node-a", PluginID: "com.test.a", Image: "test:latest", Inputs: map[string]string{}},
-			{ID: "node-b", PluginID: "com.test.b", Image: "test:latest", Inputs: map[string]string{"dep": "node-a"}},
+			{ID: "node-c", PluginID: "com.test.c", Inputs: map[string]string{"dep": "node-b"}},
+			{ID: "node-a", PluginID: "com.test.a", Inputs: map[string]string{}},
+			{ID: "node-b", PluginID: "com.test.b", Inputs: map[string]string{"dep": "node-a"}},
 		},
 	}
 
@@ -83,9 +83,9 @@ func TestDAGResolver_IndependentNodes(t *testing.T) {
 	resolver := NewDAGResolver()
 	graph := GraphState{
 		Nodes: []NodeState{
-			{ID: "node-a", PluginID: "com.test.a", Image: "test:latest", Inputs: map[string]string{}},
-			{ID: "node-b", PluginID: "com.test.b", Image: "test:latest", Inputs: map[string]string{}},
-			{ID: "node-c", PluginID: "com.test.c", Image: "test:latest", Inputs: map[string]string{}},
+			{ID: "node-a", PluginID: "com.test.a", Inputs: map[string]string{}},
+			{ID: "node-b", PluginID: "com.test.b", Inputs: map[string]string{}},
+			{ID: "node-c", PluginID: "com.test.c", Inputs: map[string]string{}},
 		},
 	}
 
@@ -111,10 +111,10 @@ func TestDAGResolver_DiamondDependency(t *testing.T) {
 	resolver := NewDAGResolver()
 	graph := GraphState{
 		Nodes: []NodeState{
-			{ID: "node-d", PluginID: "com.test.d", Image: "test:latest", Inputs: map[string]string{"b": "node-b", "c": "node-c"}},
-			{ID: "node-a", PluginID: "com.test.a", Image: "test:latest", Inputs: map[string]string{}},
-			{ID: "node-b", PluginID: "com.test.b", Image: "test:latest", Inputs: map[string]string{"a": "node-a"}},
-			{ID: "node-c", PluginID: "com.test.c", Image: "test:latest", Inputs: map[string]string{"a": "node-a"}},
+			{ID: "node-d", PluginID: "com.test.d", Inputs: map[string]string{"b": "node-b", "c": "node-c"}},
+			{ID: "node-a", PluginID: "com.test.a", Inputs: map[string]string{}},
+			{ID: "node-b", PluginID: "com.test.b", Inputs: map[string]string{"a": "node-a"}},
+			{ID: "node-c", PluginID: "com.test.c", Inputs: map[string]string{"a": "node-a"}},
 		},
 	}
 
@@ -154,8 +154,8 @@ func TestDAGResolver_CycleDetection(t *testing.T) {
 	resolver := NewDAGResolver()
 	graph := GraphState{
 		Nodes: []NodeState{
-			{ID: "node-a", PluginID: "com.test.a", Image: "test:latest", Inputs: map[string]string{"dep": "node-b"}},
-			{ID: "node-b", PluginID: "com.test.b", Image: "test:latest", Inputs: map[string]string{"dep": "node-a"}},
+			{ID: "node-a", PluginID: "com.test.a", Inputs: map[string]string{"dep": "node-b"}},
+			{ID: "node-b", PluginID: "com.test.b", Inputs: map[string]string{"dep": "node-a"}},
 		},
 	}
 
@@ -178,9 +178,9 @@ func TestDAGResolver_ThreeNodeCycle(t *testing.T) {
 	resolver := NewDAGResolver()
 	graph := GraphState{
 		Nodes: []NodeState{
-			{ID: "node-a", PluginID: "com.test.a", Image: "test:latest", Inputs: map[string]string{"dep": "node-c"}},
-			{ID: "node-b", PluginID: "com.test.b", Image: "test:latest", Inputs: map[string]string{"dep": "node-a"}},
-			{ID: "node-c", PluginID: "com.test.c", Image: "test:latest", Inputs: map[string]string{"dep": "node-b"}},
+			{ID: "node-a", PluginID: "com.test.a", Inputs: map[string]string{"dep": "node-c"}},
+			{ID: "node-b", PluginID: "com.test.b", Inputs: map[string]string{"dep": "node-a"}},
+			{ID: "node-c", PluginID: "com.test.c", Inputs: map[string]string{"dep": "node-b"}},
 		},
 	}
 
@@ -200,10 +200,10 @@ func TestDAGResolver_MixedDependencies(t *testing.T) {
 	resolver := NewDAGResolver()
 	graph := GraphState{
 		Nodes: []NodeState{
-			{ID: "node-a", PluginID: "com.test.a", Image: "test:latest", Inputs: map[string]string{}},
-			{ID: "node-b", PluginID: "com.test.b", Image: "test:latest", Inputs: map[string]string{"dep": "node-a"}},
-			{ID: "node-c", PluginID: "com.test.c", Image: "test:latest", Inputs: map[string]string{}},
-			{ID: "node-d", PluginID: "com.test.d", Image: "test:latest", Inputs: map[string]string{"b": "node-b", "c": "node-c"}},
+			{ID: "node-a", PluginID: "com.test.a", Inputs: map[string]string{}},
+			{ID: "node-b", PluginID: "com.test.b", Inputs: map[string]string{"dep": "node-a"}},
+			{ID: "node-c", PluginID: "com.test.c", Inputs: map[string]string{}},
+			{ID: "node-d", PluginID: "com.test.d", Inputs: map[string]string{"b": "node-b", "c": "node-c"}},
 		},
 	}
 
@@ -235,8 +235,8 @@ func TestDAGResolver_ValidateGraph_DuplicateID(t *testing.T) {
 	resolver := NewDAGResolver()
 	graph := GraphState{
 		Nodes: []NodeState{
-			{ID: "node-a", PluginID: "com.test.a", Image: "test:latest"},
-			{ID: "node-a", PluginID: "com.test.b", Image: "test:latest"}, // Duplicate!
+			{ID: "node-a", PluginID: "com.test.a"},
+			{ID: "node-a", PluginID: "com.test.b"}, // Duplicate!
 		},
 	}
 
@@ -250,7 +250,7 @@ func TestDAGResolver_ValidateGraph_EmptyID(t *testing.T) {
 	resolver := NewDAGResolver()
 	graph := GraphState{
 		Nodes: []NodeState{
-			{ID: "", PluginID: "com.test.a", Image: "test:latest"},
+			{ID: "", PluginID: "com.test.a"},
 		},
 	}
 
@@ -264,7 +264,7 @@ func TestDAGResolver_ValidateGraph_EmptyPluginID(t *testing.T) {
 	resolver := NewDAGResolver()
 	graph := GraphState{
 		Nodes: []NodeState{
-			{ID: "node-a", PluginID: "", Image: "test:latest"},
+			{ID: "node-a", PluginID: ""},
 		},
 	}
 
@@ -274,26 +274,12 @@ func TestDAGResolver_ValidateGraph_EmptyPluginID(t *testing.T) {
 	}
 }
 
-func TestDAGResolver_ValidateGraph_EmptyImage(t *testing.T) {
-	resolver := NewDAGResolver()
-	graph := GraphState{
-		Nodes: []NodeState{
-			{ID: "node-a", PluginID: "com.test.a", Image: ""},
-		},
-	}
-
-	err := resolver.ValidateGraph(graph)
-	if err == nil {
-		t.Fatal("expected error for empty image, got nil")
-	}
-}
-
 func TestDAGResolver_LiteralInputValues(t *testing.T) {
 	// Inputs that are literal values (not node references) should not create dependencies
 	resolver := NewDAGResolver()
 	graph := GraphState{
 		Nodes: []NodeState{
-			{ID: "node-a", PluginID: "com.test.a", Image: "test:latest", Inputs: map[string]string{
+			{ID: "node-a", PluginID: "com.test.a", Inputs: map[string]string{
 				"password": "secretpassword", // literal value
 				"port":     "5432",           // literal value
 			}},

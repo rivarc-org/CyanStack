@@ -2,6 +2,7 @@ id: com.medusajs.backend
 version: "2.1.0"
 name: "Medusa E-Commerce Backend"
 category: worker
+image: medusajs/medusa:latest
 
 inputs:
   - id: INTERNAL_PORT

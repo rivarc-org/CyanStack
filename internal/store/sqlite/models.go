@@ -26,6 +26,7 @@ type Revision struct {
 	ProjectID     string    `gorm:"size:36;not null;index"`
 	VersionNumber int       `gorm:"not null"`
 	GraphState    string    `gorm:"type:text;not null"` // JSON-serialized node graph
+	IsDraft       bool      `gorm:"column:is_draft;not null"`
 	CreatedAt     time.Time `gorm:"autoCreateTime"`
 
 	// Relations

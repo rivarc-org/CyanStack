@@ -160,7 +160,6 @@ func TestProjectHandler_Create_WithGraphState(t *testing.T) {
 				{
 					ID:       "node-1",
 					PluginID: "com.test.postgres",
-					Image:    "postgres:15",
 					Inputs:   map[string]string{"DB_PASSWORD": "secret"},
 				},
 			},

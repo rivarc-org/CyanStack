@@ -19,7 +19,11 @@ func NewRevisionRepository(db *DB) *RevisionRepository {
 
 // Create inserts a new revision
 func (r *RevisionRepository) Create(ctx context.Context, revision *Revision) error {
-	if err := r.db.WithContext(ctx).Create(revision).Error; err != nil {
+	// Explicitly select columns to ensure is_draft is saved even when false
+	// GORM skips zero values by default, which causes false to be treated as the DB default (true)
+	if err := r.db.WithContext(ctx).
+		Select("id", "project_id", "version_number", "graph_state", "is_draft", "created_at").
+		Create(revision).Error; err != nil {
 		return fmt.Errorf("creating revision: %w", err)
 	}
 	return nil
@@ -98,6 +102,17 @@ func (r *RevisionRepository) GetNextVersionNumber(ctx context.Context, projectID
 func (r *RevisionRepository) Delete(ctx context.Context, id string) error {
 	if err := r.db.WithContext(ctx).Delete(&Revision{}, "id = ?", id).Error; err != nil {
 		return fmt.Errorf("deleting revision: %w", err)
+	}
+	return nil
+}
+
+// MarkDeployed sets is_draft to false for a revision
+func (r *RevisionRepository) MarkDeployed(ctx context.Context, id string) error {
+	if err := r.db.WithContext(ctx).
+		Model(&Revision{}).
+		Where("id = ?", id).
+		Update("is_draft", false).Error; err != nil {
+		return fmt.Errorf("marking revision as deployed: %w", err)
 	}
 	return nil
 }

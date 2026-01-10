@@ -14,6 +14,7 @@ type PluginDetailResponse struct {
 	Name     string      `json:"name"`
 	Version  string      `json:"version"`
 	Category string      `json:"category"`
+	Image    string      `json:"image"`
 	Inputs   []InputDTO  `json:"inputs"`
 	Exports  []ExportDTO `json:"exports"`
 }

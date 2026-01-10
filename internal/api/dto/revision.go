@@ -9,6 +9,7 @@ import (
 type RevisionSummary struct {
 	ID            string    `json:"id"`
 	VersionNumber int       `json:"version_number"`
+	IsDraft       bool      `json:"is_draft"`
 	CreatedAt     time.Time `json:"created_at"`
 }
 
@@ -17,6 +18,7 @@ type RevisionDetailResponse struct {
 	ID            string        `json:"id"`
 	ProjectID     string        `json:"project_id"`
 	VersionNumber int           `json:"version_number"`
+	IsDraft       bool          `json:"is_draft"`
 	GraphState    GraphStateDTO `json:"graph_state"`
 	CreatedAt     time.Time     `json:"created_at"`
 }
@@ -30,7 +32,8 @@ type GraphStateDTO struct {
 type NodeStateDTO struct {
 	ID       string            `json:"id"`
 	PluginID string            `json:"plugin_id"`
-	Image    string            `json:"image"`
+	Version  string            `json:"version,omitempty"`
+	Exports  []string          `json:"exports,omitempty"`
 	Inputs   map[string]string `json:"inputs"`
 }
 

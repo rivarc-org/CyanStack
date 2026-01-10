@@ -19,21 +19,24 @@ type DeployCoordinator interface {
 
 // DeployHandler handles deployment-related API requests
 type DeployHandler struct {
-	projectRepo *sqlite.ProjectRepository
-	coordinator DeployCoordinator
-	eventBus    *events.InMemoryEventBus
+	projectRepo  *sqlite.ProjectRepository
+	revisionRepo *sqlite.RevisionRepository
+	coordinator  DeployCoordinator
+	eventBus     *events.InMemoryEventBus
 }
 
 // NewDeployHandler creates a new DeployHandler
 func NewDeployHandler(
 	projectRepo *sqlite.ProjectRepository,
+	revisionRepo *sqlite.RevisionRepository,
 	coordinator DeployCoordinator,
 	eventBus *events.InMemoryEventBus,
 ) *DeployHandler {
 	return &DeployHandler{
-		projectRepo: projectRepo,
-		coordinator: coordinator,
-		eventBus:    eventBus,
+		projectRepo:  projectRepo,
+		revisionRepo: revisionRepo,
+		coordinator:  coordinator,
+		eventBus:     eventBus,
 	}
 }
 
@@ -98,6 +101,11 @@ func (h *DeployHandler) Deploy(c *gin.Context) {
 				},
 			))
 			return
+		}
+
+		// Mark revision as deployed (no longer a draft)
+		if result.Success {
+			_ = h.revisionRepo.MarkDeployed(context.Background(), revisionID)
 		}
 
 		h.eventBus.Publish(projectID, events.NewEvent(

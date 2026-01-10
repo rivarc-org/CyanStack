@@ -143,7 +143,7 @@ var deployTestCmd = &cobra.Command{
 				{
 					ID:       "node-postgres-1",
 					PluginID: "com.cyanstack.postgres",
-					Image:    "postgres:15-alpine",
+
 					Inputs: map[string]string{
 						"DB_PASSWORD": "testpassword123",
 						"DB_NAME":     "testdb",
@@ -152,10 +152,9 @@ var deployTestCmd = &cobra.Command{
 				{
 					ID:       "node-backend-1",
 					PluginID: "com.cyanstack.testbackend",
-					Image:    "alpine:latest", // Use alpine for testing (just needs to run)
 					Inputs: map[string]string{
 						"MAIN_DATABASE": "node-postgres-1",
-					"APP_CONFIG":    "test-app-config-value",
+						"APP_CONFIG":    "test-app-config-value",
 					},
 				},
 			},

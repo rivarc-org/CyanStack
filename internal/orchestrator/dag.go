@@ -129,9 +129,6 @@ func (r *DAGResolver) ValidateGraph(graph GraphState) error {
 		if node.PluginID == "" {
 			return fmt.Errorf("node %s has empty plugin_id", node.ID)
 		}
-		if node.Image == "" {
-			return fmt.Errorf("node %s has empty image", node.ID)
-		}
 	}
 
 	// Check that all referenced dependencies exist

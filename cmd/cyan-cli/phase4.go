@@ -149,8 +149,7 @@ var cycleTestCmd = &cobra.Command{
 				{
 					ID:       "node-postgres",
 					PluginID: "com.cyanstack.postgres",
-					Image:    "postgres:15-alpine",
-					Inputs: map[string]string{
+										Inputs: map[string]string{
 						"DB_PASSWORD": "testpass",
 						"DB_NAME":     "testdb",
 					},
@@ -158,8 +157,7 @@ var cycleTestCmd = &cobra.Command{
 				{
 					ID:       "node-backend",
 					PluginID: "com.cyanstack.testbackend",
-					Image:    "alpine:latest",
-					Inputs: map[string]string{
+										Inputs: map[string]string{
 						"MAIN_DATABASE": "node-postgres",
 						"APP_CONFIG":    "initial-config-value",
 					},
@@ -260,8 +258,7 @@ var cycleTestCmd = &cobra.Command{
 				{
 					ID:       "node-postgres",
 					PluginID: "com.cyanstack.postgres",
-					Image:    "postgres:15-alpine",
-					Inputs: map[string]string{
+										Inputs: map[string]string{
 						"DB_PASSWORD": "testpass",
 						"DB_NAME":     "testdb",
 					},
@@ -269,8 +266,7 @@ var cycleTestCmd = &cobra.Command{
 				{
 					ID:       "node-backend",
 					PluginID: "com.cyanstack.testbackend",
-					Image:    "alpine:3.19", // Changed from alpine:latest - this changes the config hash
-					Inputs: map[string]string{
+										Inputs: map[string]string{
 						"MAIN_DATABASE": "node-postgres",
 						"APP_CONFIG":    "initial-config-value", // Same as initial
 					},
@@ -322,8 +318,7 @@ var cycleTestCmd = &cobra.Command{
 				{
 					ID:       "node-postgres",
 					PluginID: "com.cyanstack.postgres",
-					Image:    "postgres:15-alpine",
-					Inputs: map[string]string{
+										Inputs: map[string]string{
 						"DB_PASSWORD": "testpass",
 						"DB_NAME":     "testdb",
 					},
@@ -331,8 +326,7 @@ var cycleTestCmd = &cobra.Command{
 				{
 					ID:       "node-backend",
 					PluginID: "com.cyanstack.testbackend",
-					Image:    "alpine:3.19", // Same as test 3
-					Inputs: map[string]string{
+										Inputs: map[string]string{
 						"MAIN_DATABASE": "node-postgres",
 						"APP_CONFIG":    "new-config-value", // This changes the env, thus the hash
 					},

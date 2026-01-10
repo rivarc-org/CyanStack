@@ -11,10 +11,10 @@ type GraphState struct {
 
 // NodeState represents a single node in the graph
 type NodeState struct {
-	ID       string            `json:"id"`        // Unique node identifier
-	PluginID string            `json:"plugin_id"` // e.g., "com.cyanstack.postgres"
-	Image    string            `json:"image"`     // Docker image (from graph_state, allows version overrides)
-	Inputs   map[string]string `json:"inputs"`    // Input ID -> value or node reference
+	ID       string            `json:"id"`                 // Unique node identifier
+	PluginID string            `json:"plugin_id"`          // e.g., "com.cyanstack.postgres"
+	Version  string            `json:"version,omitempty"`  // Plugin version to use
+	Inputs   map[string]string `json:"inputs"`             // Input ID -> value or node reference
 }
 
 // RuntimeContext holds execution state during deployment
