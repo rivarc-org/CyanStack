@@ -423,3 +423,97 @@ func TestRevisionHandler_Delete_NotFound(t *testing.T) {
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
+
+func TestRevisionHandler_Update_Success(t *testing.T) {
+	db, cleanup := testutil.CreateTestDB(t)
+	defer cleanup()
+
+	// Create project and a draft revision
+	testutil.CreateTestProjectWithRevision(t, db, "proj-1", "Test Project", "rev-1")
+	testutil.CreateTestRevisionWithDraft(t, db, "rev-draft", "proj-1", 2, `{"nodes":[]}`, true)
+
+	projectRepo := sqlite.NewProjectRepository(db)
+	revisionRepo := sqlite.NewRevisionRepository(db)
+
+	handler := handlers.NewRevisionHandler(revisionRepo, projectRepo)
+	router := testutil.SetupTestRouter()
+	router.POST("/api/v1/projects/:id/revisions/:rev_id", handler.Update)
+
+	reqBody := dto.CreateRevisionRequest{
+		GraphState: dto.GraphStateDTO{
+			Nodes: []dto.NodeStateDTO{
+				{
+					ID:       "updated-node",
+					PluginID: "com.test.service",
+					Inputs:   map[string]string{"PORT": "9090"},
+				},
+			},
+		},
+	}
+
+	w := testutil.MakeRequest(router, "POST", "/api/v1/projects/proj-1/revisions/rev-draft", reqBody)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp dto.RevisionDetailResponse
+	testutil.DecodeResponse(t, w, &resp)
+
+	assert.Equal(t, "rev-draft", resp.ID)
+	assert.Len(t, resp.GraphState.Nodes, 1)
+	assert.Equal(t, "updated-node", resp.GraphState.Nodes[0].ID)
+
+	// Verify database was actually updated
+	updatedRev, err := revisionRepo.GetByID(context.Background(), "rev-draft")
+	require.NoError(t, err)
+	assert.Contains(t, updatedRev.GraphState, "updated-node")
+}
+
+func TestRevisionHandler_Update_NotDraft(t *testing.T) {
+	db, cleanup := testutil.CreateTestDB(t)
+	defer cleanup()
+
+	// Create project and a deployed revision
+	testutil.CreateTestProjectWithRevision(t, db, "proj-1", "Test Project", "rev-deployed")
+
+	projectRepo := sqlite.NewProjectRepository(db)
+	revisionRepo := sqlite.NewRevisionRepository(db)
+
+	handler := handlers.NewRevisionHandler(revisionRepo, projectRepo)
+	router := testutil.SetupTestRouter()
+	router.POST("/api/v1/projects/:id/revisions/:rev_id", handler.Update)
+
+	reqBody := dto.CreateRevisionRequest{
+		GraphState: dto.GraphStateDTO{Nodes: []dto.NodeStateDTO{}},
+	}
+
+	// Try to update the deployed revision
+	w := testutil.MakeRequest(router, "POST", "/api/v1/projects/proj-1/revisions/rev-deployed", reqBody)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var resp dto.ErrorResponse
+	testutil.DecodeResponse(t, w, &resp)
+	assert.Contains(t, resp.Error, "deployed revision")
+}
+
+func TestRevisionHandler_Update_NotFound(t *testing.T) {
+	db, cleanup := testutil.CreateTestDB(t)
+	defer cleanup()
+
+	testutil.CreateTestProject(t, db, "proj-1", "Test Project")
+
+	projectRepo := sqlite.NewProjectRepository(db)
+	revisionRepo := sqlite.NewRevisionRepository(db)
+
+	handler := handlers.NewRevisionHandler(revisionRepo, projectRepo)
+	router := testutil.SetupTestRouter()
+	router.POST("/api/v1/projects/:id/revisions/:rev_id", handler.Update)
+
+	reqBody := dto.CreateRevisionRequest{
+		GraphState: dto.GraphStateDTO{Nodes: []dto.NodeStateDTO{}},
+	}
+
+	w := testutil.MakeRequest(router, "POST", "/api/v1/projects/proj-1/revisions/nonexistent", reqBody)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}

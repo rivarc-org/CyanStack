@@ -297,3 +297,94 @@ func (h *RevisionHandler) Delete(c *gin.Context) {
 
 	c.Status(http.StatusNoContent)
 }
+
+// Update updates an existing draft revision
+func (h *RevisionHandler) Update(c *gin.Context) {
+	projectID := c.Param("id")
+	revisionID := c.Param("rev_id")
+
+	// Verify project exists
+	project, err := h.projectRepo.GetByID(c.Request.Context(), projectID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewErrorResponse(
+			"Failed to get project",
+			dto.ErrCodeInternal,
+		))
+		return
+	}
+
+	if project == nil {
+		c.JSON(http.StatusNotFound, dto.NewErrorResponse(
+			"Project not found",
+			dto.ErrCodeNotFound,
+		))
+		return
+	}
+
+	// Get the revision
+	revision, err := h.revisionRepo.GetByID(c.Request.Context(), revisionID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewErrorResponse(
+			"Failed to get revision",
+			dto.ErrCodeInternal,
+		))
+		return
+	}
+
+	if revision == nil || revision.ProjectID != projectID {
+		c.JSON(http.StatusNotFound, dto.NewErrorResponse(
+			"Revision not found",
+			dto.ErrCodeNotFound,
+		))
+		return
+	}
+
+	// Can only update drafts
+	if !revision.IsDraft {
+		c.JSON(http.StatusBadRequest, dto.NewErrorResponse(
+			"Cannot update a deployed revision",
+			dto.ErrCodeValidation,
+		))
+		return
+	}
+
+	var req dto.CreateRevisionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, dto.NewErrorResponse(
+			"Invalid request body",
+			dto.ErrCodeValidation,
+		))
+		return
+	}
+
+	// Serialize graph state
+	graphJSON, err := json.Marshal(req.GraphState)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewErrorResponse(
+			"Failed to serialize graph state",
+			dto.ErrCodeInternal,
+		))
+		return
+	}
+
+	// Update the revision
+	if err := h.revisionRepo.UpdateGraphState(c.Request.Context(), revisionID, string(graphJSON)); err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewErrorResponse(
+			"Failed to update revision",
+			dto.ErrCodeInternal,
+		))
+		return
+	}
+
+	// Return the updated revision
+	response := dto.RevisionDetailResponse{
+		ID:            revision.ID,
+		ProjectID:     revision.ProjectID,
+		VersionNumber: revision.VersionNumber,
+		IsDraft:       revision.IsDraft,
+		GraphState:    req.GraphState,
+		CreatedAt:     revision.CreatedAt,
+	}
+
+	c.JSON(http.StatusOK, response)
+}

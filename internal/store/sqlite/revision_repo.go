@@ -116,3 +116,14 @@ func (r *RevisionRepository) MarkDeployed(ctx context.Context, id string) error 
 	}
 	return nil
 }
+
+// UpdateGraphState updates the graph state of a revision
+func (r *RevisionRepository) UpdateGraphState(ctx context.Context, id string, graphState string) error {
+	if err := r.db.WithContext(ctx).
+		Model(&Revision{}).
+		Where("id = ?", id).
+		Update("graph_state", graphState).Error; err != nil {
+		return fmt.Errorf("updating graph state: %w", err)
+	}
+	return nil
+}

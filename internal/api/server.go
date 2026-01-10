@@ -88,6 +88,7 @@ func (s *Server) setupRoutes() {
 	v1.GET("/projects/:id/revisions", revisionHandler.List)
 	v1.GET("/projects/:id/revisions/:rev_id", revisionHandler.Get)
 	v1.POST("/projects/:id/revisions", revisionHandler.Create)
+	v1.POST("/projects/:id/revisions/:rev_id", revisionHandler.Update)
 	v1.DELETE("/projects/:id/revisions/:rev_id", revisionHandler.Delete)
 
 	// Crypto routes
