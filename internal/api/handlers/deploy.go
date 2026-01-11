@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"log"
 	"net/http"
 
 	"github.com/cyanstack/cyanstack/internal/api/dto"
@@ -94,6 +95,7 @@ func (h *DeployHandler) Deploy(c *gin.Context) {
 		result, err := h.coordinator.Deploy(context.Background(), revisionID)
 
 		if err != nil {
+			log.Printf("deployment failed: %v", err)
 			h.eventBus.Publish(projectID, events.NewEvent(
 				events.EventDeployFailed,
 				projectID,
