@@ -35,6 +35,13 @@ type NodeStateDTO struct {
 	Version  string            `json:"version,omitempty"`
 	Exports  []string          `json:"exports,omitempty"`
 	Inputs   map[string]string `json:"inputs"`
+	Position *PositionDTO      `json:"position,omitempty"`
+}
+
+// PositionDTO represents the x,y coordinates of a node
+type PositionDTO struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
 }
 
 // CreateRevisionRequest represents a request to create a new revision
