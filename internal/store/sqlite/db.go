@@ -32,11 +32,11 @@ func Open() (*DB, error) {
 // If path is empty, uses the default location ~/.cyanstack/cyanstack.db
 func OpenAt(path string) (*DB, error) {
 	if path == "" {
-		homeDir, err := os.UserHomeDir()
+		cwd, err := os.Getwd()
 		if err != nil {
-			return nil, fmt.Errorf("getting home directory: %w", err)
+			return nil, fmt.Errorf("getting current working directory: %w", err)
 		}
-		path = filepath.Join(homeDir, DefaultConfigDir, DefaultDBName)
+		path = filepath.Join(cwd, DefaultConfigDir, DefaultDBName)
 	}
 
 	// Ensure parent directory exists

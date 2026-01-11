@@ -28,8 +28,8 @@ type KeyStore struct {
 // If keyPath is empty, uses the default location ~/.cyanstack/key
 func NewKeyStore(keyPath string) *KeyStore {
 	if keyPath == "" {
-		homeDir, _ := os.UserHomeDir()
-		keyPath = filepath.Join(homeDir, DefaultConfigDir, DefaultKeyFile)
+		cwd, _ := os.Getwd()
+		keyPath = filepath.Join(cwd, DefaultConfigDir, DefaultKeyFile)
 	}
 	return &KeyStore{keyPath: keyPath}
 }

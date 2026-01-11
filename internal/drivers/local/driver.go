@@ -53,11 +53,11 @@ func NewDriver(opts ...DriverOption) (*Driver, error) {
 		return nil, fmt.Errorf("creating docker client: %w", err)
 	}
 
-	homeDir, _ := os.UserHomeDir()
+	cwd, _ := os.Getwd()
 	d := &Driver{
 		client:    cli,
 		semaphore: NewSemaphore(0), // Default to NumCPU
-		dataRoot:  filepath.Join(homeDir, ".cyanstack", "data"),
+		dataRoot:  filepath.Join(cwd, ".cyanstack", "data"),
 	}
 
 	for _, opt := range opts {

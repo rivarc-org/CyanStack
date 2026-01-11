@@ -41,21 +41,6 @@ func (r *RevisionRepository) GetByID(ctx context.Context, id string) (*Revision,
 	return &revision, nil
 }
 
-// GetLatest retrieves the latest revision for a project
-func (r *RevisionRepository) GetLatest(ctx context.Context, projectID string) (*Revision, error) {
-	var revision Revision
-	if err := r.db.WithContext(ctx).
-		Where("project_id = ?", projectID).
-		Order("version_number DESC").
-		First(&revision).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("getting latest revision: %w", err)
-	}
-	return &revision, nil
-}
-
 // GetByVersion retrieves a specific version for a project
 func (r *RevisionRepository) GetByVersion(ctx context.Context, projectID string, version int) (*Revision, error) {
 	var revision Revision
