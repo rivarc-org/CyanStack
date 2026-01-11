@@ -73,7 +73,7 @@ func TestDeployHandler_Deploy_Success(t *testing.T) {
 	router := testutil.SetupTestRouter()
 	router.POST("/api/v1/projects/:id/deploy", handler.Deploy)
 
-	w := testutil.MakeRequest(router, "POST", "/api/v1/projects/proj-1/deploy", nil)
+	w := testutil.MakeRequest(router, "POST", "/api/v1/projects/proj-1/deploy", dto.DeployRequest{RevisionID: "rev-1"})
 
 	// Should return 202 Accepted immediately
 	assert.Equal(t, http.StatusAccepted, w.Code)
@@ -107,7 +107,7 @@ func TestDeployHandler_Deploy_ProjectNotFound(t *testing.T) {
 	router := testutil.SetupTestRouter()
 	router.POST("/api/v1/projects/:id/deploy", handler.Deploy)
 
-	w := testutil.MakeRequest(router, "POST", "/api/v1/projects/nonexistent/deploy", nil)
+	w := testutil.MakeRequest(router, "POST", "/api/v1/projects/nonexistent/deploy", dto.DeployRequest{RevisionID: "rev-1"})
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
 
@@ -137,7 +137,7 @@ func TestDeployHandler_Deploy_NoCurrentRevision(t *testing.T) {
 	router := testutil.SetupTestRouter()
 	router.POST("/api/v1/projects/:id/deploy", handler.Deploy)
 
-	w := testutil.MakeRequest(router, "POST", "/api/v1/projects/proj-no-rev/deploy", nil)
+	w := testutil.MakeRequest(router, "POST", "/api/v1/projects/proj-no-rev/deploy", dto.DeployRequest{RevisionID: "rev-1"})
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 
@@ -206,7 +206,7 @@ func TestDeployHandler_Deploy_PublishesEvents(t *testing.T) {
 	eventCh, unsubscribe := eventBus.Subscribe("proj-1")
 	defer unsubscribe()
 
-	w := testutil.MakeRequest(router, "POST", "/api/v1/projects/proj-1/deploy", nil)
+	w := testutil.MakeRequest(router, "POST", "/api/v1/projects/proj-1/deploy", dto.DeployRequest{RevisionID: "rev-1"})
 	assert.Equal(t, http.StatusAccepted, w.Code)
 
 	// Collect events
@@ -340,7 +340,7 @@ func TestDeployHandler_Deploy_FailedDeployment(t *testing.T) {
 	eventCh, unsubscribe := eventBus.Subscribe("proj-1")
 	defer unsubscribe()
 
-	w := testutil.MakeRequest(router, "POST", "/api/v1/projects/proj-1/deploy", nil)
+	w := testutil.MakeRequest(router, "POST", "/api/v1/projects/proj-1/deploy", dto.DeployRequest{RevisionID: "rev-1"})
 
 	// Should still return 202 (async)
 	assert.Equal(t, http.StatusAccepted, w.Code)

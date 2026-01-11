@@ -202,3 +202,11 @@ func (a *ProjectStoreAdapter) GetByID(ctx context.Context, id string) (*orchestr
 		Name: proj.Name,
 	}, nil
 }
+
+func (a *ProjectStoreAdapter) SetCurrentRevision(ctx context.Context, projectID, revisionID string) error {
+	return a.repo.SetCurrentRevision(ctx, projectID, revisionID)
+}
+
+func (a *RevisionStoreAdapter) MarkDeployed(ctx context.Context, id string) error {
+	return a.repo.MarkDeployed(ctx, id)
+}

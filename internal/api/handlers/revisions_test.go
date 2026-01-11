@@ -167,10 +167,10 @@ func TestRevisionHandler_Create_Success(t *testing.T) {
 	assert.Len(t, resp.GraphState.Nodes, 1)
 	assert.Equal(t, "new-node", resp.GraphState.Nodes[0].ID)
 
-	// Verify project's current revision was updated
+	// Verify project's current revision was NOT updated (decoupled Save/Deploy)
 	project, err := projectRepo.GetByID(context.Background(), "proj-1")
 	require.NoError(t, err)
-	assert.Equal(t, resp.ID, *project.CurrentRevisionID)
+	assert.Equal(t, "rev-1", *project.CurrentRevisionID)
 }
 
 func TestRevisionHandler_Create_MissingBody(t *testing.T) {

@@ -15,9 +15,10 @@ import (
 	"github.com/cyanstack/cyanstack/internal/drivers/local"
 )
 
-// RevisionStore defines the interface for revision retrieval
+// RevisionStore defines the interface for revision retrieval and updates
 type RevisionStore interface {
 	GetByID(ctx context.Context, id string) (*RevisionData, error)
+	MarkDeployed(ctx context.Context, id string) error
 }
 
 // RevisionData represents the data needed from a revision
@@ -27,9 +28,10 @@ type RevisionData struct {
 	GraphState string // JSON
 }
 
-// ProjectStore defines the interface for project retrieval
+// ProjectStore defines the interface for project retrieval and updates
 type ProjectStore interface {
 	GetByID(ctx context.Context, id string) (*ProjectData, error)
+	SetCurrentRevision(ctx context.Context, projectID, revisionID string) error
 }
 
 // ProjectData represents the data needed from a project
@@ -101,6 +103,16 @@ func (c *Coordinator) Deploy(ctx context.Context, revisionID string) (*DeployRes
 	}
 	if project == nil {
 		return nil, fmt.Errorf("project %s not found", revision.ProjectID)
+	}
+
+	// 2.5 Set as current revision
+	if err := c.projectStore.SetCurrentRevision(ctx, project.ID, revisionID); err != nil {
+		return nil, fmt.Errorf("setting current revision: %w", err)
+	}
+
+	// 2.6 Mark as deployed (no longer a draft)
+	if err := c.revisionStore.MarkDeployed(ctx, revisionID); err != nil {
+		return nil, fmt.Errorf("marking revision as deployed: %w", err)
 	}
 
 	// 3. Parse graph state

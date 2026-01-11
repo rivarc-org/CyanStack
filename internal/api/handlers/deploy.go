@@ -71,13 +71,15 @@ func (h *DeployHandler) Deploy(c *gin.Context) {
 	}
 
 	var req dto.DeployRequest
-	_ = c.ShouldBindJSON(&req) // Allow empty body
-
-	// Use provided revision or default to current
-	revisionID := *project.CurrentRevisionID
-	if req.RevisionID != "" {
-		revisionID = req.RevisionID
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, dto.NewErrorResponse(
+			"Missing or invalid revision_id",
+			dto.ErrCodeValidation,
+		))
+		return
 	}
+
+	revisionID := req.RevisionID
 
 	// Start async deployment
 	go func() {
@@ -101,11 +103,6 @@ func (h *DeployHandler) Deploy(c *gin.Context) {
 				},
 			))
 			return
-		}
-
-		// Mark revision as deployed (no longer a draft)
-		if result.Success {
-			_ = h.revisionRepo.MarkDeployed(context.Background(), revisionID)
 		}
 
 		h.eventBus.Publish(projectID, events.NewEvent(

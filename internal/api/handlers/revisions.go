@@ -203,15 +203,6 @@ func (h *RevisionHandler) Create(c *gin.Context) {
 		return
 	}
 
-	// Update project's current revision
-	if err := h.projectRepo.SetCurrentRevision(c.Request.Context(), projectID, revisionID); err != nil {
-		c.JSON(http.StatusInternalServerError, dto.NewErrorResponse(
-			"Failed to update project's current revision",
-			dto.ErrCodeInternal,
-		))
-		return
-	}
-
 	// Fetch the created revision to get the CreatedAt timestamp
 	createdRevision, _ := h.revisionRepo.GetByID(c.Request.Context(), revisionID)
 

@@ -2,7 +2,7 @@ package dto
 
 // DeployRequest represents a request to deploy a project
 type DeployRequest struct {
-	RevisionID string `json:"revision_id,omitempty"` // Optional, defaults to current revision
+	RevisionID string `json:"revision_id" binding:"required"`
 }
 
 // DeployResponse represents the response after starting a deployment
