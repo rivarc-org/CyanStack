@@ -35,6 +35,7 @@ The server provides endpoints for:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		port, _ := cmd.Flags().GetInt("port")
 		pluginPath, _ := cmd.Flags().GetString("plugins")
+		headless, _ := cmd.Flags().GetBool("headless")
 
 		// 1. Initialize database
 		db, err := sqlite.Open()
@@ -162,6 +163,7 @@ The server provides endpoints for:
 			PluginLoader: pluginLoader,
 			PluginPath:   pluginPath,
 			OIDCProvider: oidcProvider,
+			Headless:     headless,
 		})
 
 		// 8. Setup graceful shutdown
@@ -181,7 +183,13 @@ The server provides endpoints for:
 		}()
 
 		// 9. Start server
-		fmt.Printf("\nCyanStack API Server starting on http://localhost:%d\n", port)
+		fmt.Printf("\nCyanStack Server starting on http://localhost:%d\n", port)
+		if headless {
+			fmt.Println("Mode: Headless (API only)")
+		} else {
+			fmt.Printf("Web UI: http://localhost:%d\n", port)
+		}
+		fmt.Printf("API: http://localhost:%d/api/v1\n", port)
 		fmt.Printf("OIDC Discovery: http://localhost:%d/.well-known/openid-configuration\n", port)
 		fmt.Println("Press Ctrl+C to stop")
 		fmt.Println()
@@ -198,6 +206,7 @@ The server provides endpoints for:
 func init() {
 	serveCmd.Flags().IntP("port", "p", 8080, "Port to listen on")
 	serveCmd.Flags().StringP("plugins", "", "", "Path to plugins directory")
+	serveCmd.Flags().Bool("headless", false, "Run in headless mode (API only, no embedded UI)")
 }
 
 // RevisionStoreAdapter adapts RevisionRepository to the RevisionStore interface

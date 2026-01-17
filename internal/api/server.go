@@ -3,7 +3,9 @@ package api
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/cyanstack/cyanstack/internal/api/events"
@@ -15,6 +17,7 @@ import (
 	"github.com/cyanstack/cyanstack/internal/orchestrator"
 	"github.com/cyanstack/cyanstack/internal/security"
 	"github.com/cyanstack/cyanstack/internal/store/sqlite"
+	"github.com/cyanstack/cyanstack/internal/ui"
 	"github.com/gin-gonic/gin"
 )
 
@@ -32,6 +35,7 @@ type Server struct {
 	oidcProvider  *authoidc.Provider
 	pluginPath    string
 	listenAddr    string
+	headless      bool
 }
 
 // ServerConfig contains the configuration for creating a new Server
@@ -45,6 +49,7 @@ type ServerConfig struct {
 	PluginLoader orchestrator.PluginLoader
 	PluginPath   string
 	OIDCProvider *authoidc.Provider
+	Headless     bool // If true, don't serve the embedded UI
 }
 
 // NewServer creates a new API server
@@ -70,6 +75,7 @@ func NewServer(cfg ServerConfig) *Server {
 		oidcProvider: cfg.OIDCProvider,
 		pluginPath:   cfg.PluginPath,
 		listenAddr:   cfg.ListenAddr,
+		headless:     cfg.Headless,
 	}
 
 	s.setupRoutes()
@@ -123,6 +129,11 @@ func (s *Server) setupRoutes() {
 	if s.oidcProvider != nil {
 		s.setupOIDCRoutes()
 	}
+
+	// Serve embedded frontend static files (unless running in headless mode)
+	if !s.headless {
+		s.setupStaticFileServing()
+	}
 }
 
 // setupOIDCRoutes configures OIDC/OAuth2 endpoints
@@ -144,6 +155,63 @@ func (s *Server) setupOIDCRoutes() {
 	s.router.GET("/login", authHandler.LoginPage)
 	s.router.POST("/login", authHandler.LoginSubmit)
 	s.router.GET("/logout", authHandler.Logout)
+}
+
+// setupStaticFileServing configures serving of embedded frontend assets with SPA fallback.
+// This serves the React frontend from the embedded filesystem and handles client-side routing
+// by serving index.html for any route that doesn't match an API endpoint or static file.
+func (s *Server) setupStaticFileServing() {
+	frontendFS := ui.GetFS()
+
+	// Serve static assets (JS, CSS, images, etc.)
+	s.router.Use(func(c *gin.Context) {
+		path := c.Request.URL.Path
+
+		// Skip API routes - they are handled by registered handlers
+		if strings.HasPrefix(path, "/api/") {
+			c.Next()
+			return
+		}
+
+		// Skip OIDC routes
+		if strings.HasPrefix(path, "/.well-known/") ||
+			path == "/authorize" || strings.HasPrefix(path, "/authorize/") ||
+			path == "/oauth/token" || path == "/userinfo" || path == "/keys" ||
+			path == "/end_session" || path == "/login" || path == "/logout" {
+			c.Next()
+			return
+		}
+
+		// Try to serve static file
+		filePath := strings.TrimPrefix(path, "/")
+		if filePath == "" {
+			filePath = "index.html"
+		}
+
+		// Check if file exists in embedded filesystem
+		file, err := frontendFS.Open(filePath)
+		if err == nil {
+			file.Close()
+			c.FileFromFS(path, http.FS(frontendFS))
+			c.Abort()
+			return
+		}
+
+		// For SPA routing: if not a file request (no extension or not found),
+		// serve index.html to let React Router handle it
+		if !strings.Contains(filePath, ".") || isNotFoundError(err) {
+			c.FileFromFS("/index.html", http.FS(frontendFS))
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	})
+}
+
+// isNotFoundError checks if the error is a file not found error
+func isNotFoundError(err error) bool {
+	return err != nil && (err == fs.ErrNotExist || strings.Contains(err.Error(), "not found"))
 }
 
 // Router returns the Gin router for testing
