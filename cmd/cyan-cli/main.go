@@ -35,6 +35,9 @@ func init() {
 
 	// Phase 5 commands
 	rootCmd.AddCommand(serveCmd)
+
+	// Auth commands
+	rootCmd.AddCommand(authCmd)
 }
 
 func main() {

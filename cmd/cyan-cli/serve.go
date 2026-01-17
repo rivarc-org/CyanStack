@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/cyanstack/cyanstack/internal/api"
+	authoidc "github.com/cyanstack/cyanstack/internal/auth/oidc"
 	"github.com/cyanstack/cyanstack/internal/drivers/local"
 	"github.com/cyanstack/cyanstack/internal/orchestrator"
 	"github.com/cyanstack/cyanstack/internal/security"
@@ -80,7 +81,44 @@ The server provides endpoints for:
 		}
 		fmt.Printf("Plugin path: %s\n", pluginPath)
 
-		// 5. Initialize orchestration components
+		// 5. Initialize OIDC Provider
+		issuerURL := fmt.Sprintf("http://localhost:%d", port)
+
+		// Ensure signing key exists
+		signingKey, err := authoidc.EnsureSigningKey(context.Background(), db.DB)
+		if err != nil {
+			return fmt.Errorf("failed to ensure signing key: %w", err)
+		}
+		fmt.Printf("OIDC signing key: %s\n", signingKey.ID)
+
+		// Create OIDC storage
+		oidcStorage := authoidc.NewStorage(db.DB, signingKey)
+
+		// Create OIDC provider (allow HTTP for local development)
+		oidcProvider, err := authoidc.NewProvider(authoidc.ProviderConfig{
+			Issuer:        issuerURL,
+			DB:            db.DB,
+			Storage:       oidcStorage,
+			AllowInsecure: true, // Allow HTTP for localhost development
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create OIDC provider: %w", err)
+		}
+		fmt.Println("OIDC provider initialized")
+
+		// Ensure default user exists
+		if err := authoidc.EnsureDefaultUser(context.Background(), db.DB); err != nil {
+			return fmt.Errorf("failed to ensure default user: %w", err)
+		}
+		fmt.Println("Default user ensured (test@test.com / test)")
+
+		// Ensure test CLI client exists for 'cyan-cli auth test'
+		if err := authoidc.EnsureTestCLIClient(context.Background(), db.DB); err != nil {
+			return fmt.Errorf("failed to ensure test CLI client: %w", err)
+		}
+		fmt.Printf("Test CLI client ensured (ID: %s)\n", authoidc.TestCLIClientID)
+
+		// 6. Initialize orchestration components
 		pluginLoader := orchestrator.NewFilePluginLoader(pluginPath)
 		portAllocator := orchestrator.NewSimplePortAllocator()
 		dagResolver := orchestrator.NewDAGResolver()
@@ -92,6 +130,10 @@ The server provides endpoints for:
 			pluginLoader,
 			portAllocator,
 		)
+
+		// Set OIDC registrar on env resolver
+		oidcRegistrar := NewOIDCRegistrarAdapter(oidcStorage)
+		envResolver.SetOIDCRegistrar(oidcRegistrar, issuerURL)
 
 		// Create repositories
 		projectRepo := sqlite.NewProjectRepository(db)
@@ -109,7 +151,7 @@ The server provides endpoints for:
 			StartupTimeout: 2 * time.Minute,
 		})
 
-		// 6. Create API server
+		// 7. Create API server
 		server := api.NewServer(api.ServerConfig{
 			ListenAddr:   fmt.Sprintf(":%d", port),
 			ProjectRepo:  projectRepo,
@@ -119,9 +161,10 @@ The server provides endpoints for:
 			Crypto:       crypto,
 			PluginLoader: pluginLoader,
 			PluginPath:   pluginPath,
+			OIDCProvider: oidcProvider,
 		})
 
-		// 7. Setup graceful shutdown
+		// 8. Setup graceful shutdown
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
@@ -137,8 +180,9 @@ The server provides endpoints for:
 			}
 		}()
 
-		// 8. Start server
+		// 9. Start server
 		fmt.Printf("\nCyanStack API Server starting on http://localhost:%d\n", port)
+		fmt.Printf("OIDC Discovery: http://localhost:%d/.well-known/openid-configuration\n", port)
 		fmt.Println("Press Ctrl+C to stop")
 		fmt.Println()
 
@@ -209,4 +253,41 @@ func (a *ProjectStoreAdapter) SetCurrentRevision(ctx context.Context, projectID,
 
 func (a *RevisionStoreAdapter) MarkDeployed(ctx context.Context, id string) error {
 	return a.repo.MarkDeployed(ctx, id)
+}
+
+// OIDCRegistrarAdapter adapts authoidc.Storage to orchestrator.OIDCRegistrar interface
+type OIDCRegistrarAdapter struct {
+	storage *authoidc.Storage
+}
+
+func NewOIDCRegistrarAdapter(storage *authoidc.Storage) *OIDCRegistrarAdapter {
+	return &OIDCRegistrarAdapter{storage: storage}
+}
+
+func (a *OIDCRegistrarAdapter) RegisterClient(ctx context.Context, reg orchestrator.OIDCClientRegistration) (*orchestrator.OIDCCredentials, error) {
+	creds, err := a.storage.RegisterClient(ctx, authoidc.ClientRegistration{
+		Name:         reg.Name,
+		PluginID:     reg.PluginID,
+		NodeID:       reg.NodeID,
+		ProjectID:    reg.ProjectID,
+		RedirectURIs: reg.RedirectURIs,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &orchestrator.OIDCCredentials{
+		ClientID:     creds.ClientID,
+		ClientSecret: creds.ClientSecret,
+	}, nil
+}
+
+func (a *OIDCRegistrarAdapter) GetClientByNodeID(ctx context.Context, projectID, nodeID string) (*orchestrator.OIDCCredentials, error) {
+	creds, err := a.storage.GetClientByNodeID(ctx, projectID, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	return &orchestrator.OIDCCredentials{
+		ClientID:     creds.ClientID,
+		ClientSecret: creds.ClientSecret,
+	}, nil
 }

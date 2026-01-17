@@ -19,11 +19,34 @@ type Crypto interface {
 	DecryptFromJSON(value string) (string, error)
 }
 
+// OIDCCredentials holds the OIDC client credentials
+type OIDCCredentials struct {
+	ClientID     string
+	ClientSecret string
+}
+
+// OIDCClientRegistration contains the data needed to register a new OIDC client
+type OIDCClientRegistration struct {
+	Name         string
+	PluginID     string
+	NodeID       string
+	ProjectID    string
+	RedirectURIs []string
+}
+
+// OIDCRegistrar defines the interface for OIDC client registration
+type OIDCRegistrar interface {
+	RegisterClient(ctx context.Context, reg OIDCClientRegistration) (*OIDCCredentials, error)
+	GetClientByNodeID(ctx context.Context, projectID, nodeID string) (*OIDCCredentials, error)
+}
+
 // EnvResolver resolves environment variables for nodes
 type EnvResolver struct {
 	crypto        Crypto
 	pluginLoader  PluginLoader
 	portAllocator PortAllocator
+	oidcRegistrar OIDCRegistrar
+	issuerURL     string
 }
 
 // NewEnvResolver creates a new environment resolver
@@ -37,6 +60,12 @@ func NewEnvResolver(
 		pluginLoader:  pluginLoader,
 		portAllocator: portAllocator,
 	}
+}
+
+// SetOIDCRegistrar sets the OIDC registrar for dynamic client registration
+func (r *EnvResolver) SetOIDCRegistrar(registrar OIDCRegistrar, issuerURL string) {
+	r.oidcRegistrar = registrar
+	r.issuerURL = issuerURL
 }
 
 // ResolveNodeEnv resolves all environment variables for a node
@@ -103,6 +132,13 @@ func (r *EnvResolver) ResolveNodeEnv(
 	// Resolve custom exports (templates like {{INTERNAL_HOST}})
 	if err := r.resolveCustomExports(node, pluginConfig, runtimeCtx, env); err != nil {
 		return nil, fmt.Errorf("resolving custom exports: %w", err)
+	}
+
+	// Inject OIDC credentials if plugin has auth: true
+	if pluginConfig.Auth && r.oidcRegistrar != nil {
+		if err := r.resolveOIDCCredentials(ctx, node, pluginConfig, runtimeCtx, env); err != nil {
+			return nil, fmt.Errorf("resolving OIDC credentials: %w", err)
+		}
 	}
 
 	return env, nil
@@ -351,4 +387,66 @@ func generateSecureSecret(length int) (string, error) {
 		encoded = encoded[:length]
 	}
 	return encoded, nil
+}
+
+// resolveOIDCCredentials handles OIDC client registration and credential injection
+func (r *EnvResolver) resolveOIDCCredentials(
+	ctx context.Context,
+	node NodeState,
+	pluginConfig *config.PluginConfig,
+	runtimeCtx *RuntimeContext,
+	env map[string]string,
+) error {
+	// Check if client already exists for this node
+	creds, err := r.oidcRegistrar.GetClientByNodeID(ctx, runtimeCtx.ProjectID, node.ID)
+	if err == nil && creds != nil && creds.ClientID != "" {
+		// Client already registered, but we need to generate a new secret
+		// since the original secret was hashed and can't be retrieved
+		// For existing clients, we'll need to register a new one
+	}
+
+	// Build redirect URI based on node's external URL
+	externalHost := fmt.Sprintf("%s.%s.localhost", node.ID, runtimeCtx.ProjectName)
+	redirectURI := fmt.Sprintf("http://%s/auth/callback", externalHost)
+
+	// Register new OIDC client
+	reg := OIDCClientRegistration{
+		Name:         pluginConfig.Name,
+		PluginID:     pluginConfig.ID,
+		NodeID:       node.ID,
+		ProjectID:    runtimeCtx.ProjectID,
+		RedirectURIs: []string{redirectURI},
+	}
+
+	creds, err = r.oidcRegistrar.RegisterClient(ctx, reg)
+	if err != nil {
+		return fmt.Errorf("registering OIDC client: %w", err)
+	}
+
+	// Inject OIDC environment variables
+	r.injectOIDCEnvVars(env, creds, runtimeCtx)
+
+	return nil
+}
+
+// injectOIDCEnvVars sets the standard OIDC environment variables
+func (r *EnvResolver) injectOIDCEnvVars(env map[string]string, creds *OIDCCredentials, runtimeCtx *RuntimeContext) {
+	// Standard OIDC environment variables
+	env["OIDC_CLIENT_ID"] = creds.ClientID
+	env["OIDC_CLIENT_SECRET"] = creds.ClientSecret
+
+	// IdP URLs from container's perspective (via Docker's host gateway)
+	issuerInternal := "http://host.docker.internal:8080"
+	env["OIDC_ISSUER_URL"] = issuerInternal
+	env["OIDC_DISCOVERY_URL"] = issuerInternal + "/.well-known/openid-configuration"
+	env["OIDC_TOKEN_URL"] = issuerInternal + "/token"
+	env["OIDC_USERINFO_URL"] = issuerInternal + "/userinfo"
+	env["OIDC_JWKS_URL"] = issuerInternal + "/jwks"
+
+	// Browser-facing URL for authorize endpoint (user sees this in browser)
+	if r.issuerURL != "" {
+		env["OIDC_AUTHORIZE_URL"] = r.issuerURL + "/authorize"
+	} else {
+		env["OIDC_AUTHORIZE_URL"] = "http://localhost:8080/authorize"
+	}
 }

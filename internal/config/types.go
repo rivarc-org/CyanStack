@@ -19,7 +19,8 @@ type PluginConfig struct {
 	Version   string             `yaml:"version"`
 	Name      string             `yaml:"name"`
 	Category  PluginCategory     `yaml:"category"`
-	Image     string             `yaml:"image"` // Docker image for this plugin
+	Image     string             `yaml:"image"`              // Docker image for this plugin
+	Auth      bool               `yaml:"auth,omitempty"`     // Enable OIDC authentication for this plugin
 	Inputs    []InputDefinition  `yaml:"inputs"`
 	Lifecycle Lifecycle          `yaml:"lifecycle"`
 	Exports   []ExportDefinition `yaml:"exports,omitempty"`

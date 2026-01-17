@@ -9,6 +9,8 @@ import (
 	"github.com/cyanstack/cyanstack/internal/api/events"
 	"github.com/cyanstack/cyanstack/internal/api/handlers"
 	"github.com/cyanstack/cyanstack/internal/api/middleware"
+	"github.com/cyanstack/cyanstack/internal/auth"
+	authoidc "github.com/cyanstack/cyanstack/internal/auth/oidc"
 	"github.com/cyanstack/cyanstack/internal/drivers/interfaces"
 	"github.com/cyanstack/cyanstack/internal/orchestrator"
 	"github.com/cyanstack/cyanstack/internal/security"
@@ -18,17 +20,18 @@ import (
 
 // Server is the API server
 type Server struct {
-	router       *gin.Engine
-	httpServer   *http.Server
-	projectRepo  *sqlite.ProjectRepository
-	revisionRepo *sqlite.RevisionRepository
-	coordinator  *orchestrator.Coordinator
-	driver       interfaces.RuntimeDriver
-	crypto       *security.AESCrypto
-	pluginLoader orchestrator.PluginLoader
-	eventBus     *events.InMemoryEventBus
-	pluginPath   string
-	listenAddr   string
+	router        *gin.Engine
+	httpServer    *http.Server
+	projectRepo   *sqlite.ProjectRepository
+	revisionRepo  *sqlite.RevisionRepository
+	coordinator   *orchestrator.Coordinator
+	driver        interfaces.RuntimeDriver
+	crypto        *security.AESCrypto
+	pluginLoader  orchestrator.PluginLoader
+	eventBus      *events.InMemoryEventBus
+	oidcProvider  *authoidc.Provider
+	pluginPath    string
+	listenAddr    string
 }
 
 // ServerConfig contains the configuration for creating a new Server
@@ -41,6 +44,7 @@ type ServerConfig struct {
 	Crypto       *security.AESCrypto
 	PluginLoader orchestrator.PluginLoader
 	PluginPath   string
+	OIDCProvider *authoidc.Provider
 }
 
 // NewServer creates a new API server
@@ -63,6 +67,7 @@ func NewServer(cfg ServerConfig) *Server {
 		crypto:       cfg.Crypto,
 		pluginLoader: cfg.PluginLoader,
 		eventBus:     eventBus,
+		oidcProvider: cfg.OIDCProvider,
 		pluginPath:   cfg.PluginPath,
 		listenAddr:   cfg.ListenAddr,
 	}
@@ -113,6 +118,32 @@ func (s *Server) setupRoutes() {
 	libraryHandler := handlers.NewLibraryHandler(s.pluginPath)
 	v1.GET("/library", libraryHandler.List)
 	v1.GET("/library/:plugin_id", libraryHandler.Get)
+
+	// OIDC routes (if provider is configured)
+	if s.oidcProvider != nil {
+		s.setupOIDCRoutes()
+	}
+}
+
+// setupOIDCRoutes configures OIDC/OAuth2 endpoints
+func (s *Server) setupOIDCRoutes() {
+	oidcHandler := s.oidcProvider.Handler()
+
+	// Standard OIDC endpoints (handled by zitadel/oidc)
+	// These must be at the root, not under /api/v1
+	s.router.Any("/.well-known/*path", gin.WrapH(oidcHandler))
+	s.router.Any("/authorize", gin.WrapH(oidcHandler))
+	s.router.Any("/authorize/callback", gin.WrapH(oidcHandler))
+	s.router.Any("/oauth/token", gin.WrapH(oidcHandler))
+	s.router.Any("/userinfo", gin.WrapH(oidcHandler))
+	s.router.Any("/keys", gin.WrapH(oidcHandler))
+	s.router.Any("/end_session", gin.WrapH(oidcHandler))
+
+	// Login UI (custom handlers)
+	authHandler := auth.NewHandler(s.oidcProvider)
+	s.router.GET("/login", authHandler.LoginPage)
+	s.router.POST("/login", authHandler.LoginSubmit)
+	s.router.GET("/logout", authHandler.Logout)
 }
 
 // Router returns the Gin router for testing
