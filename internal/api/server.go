@@ -11,7 +11,6 @@ import (
 	"github.com/cyanstack/cyanstack/internal/api/events"
 	"github.com/cyanstack/cyanstack/internal/api/handlers"
 	"github.com/cyanstack/cyanstack/internal/api/middleware"
-	"github.com/cyanstack/cyanstack/internal/auth"
 	authoidc "github.com/cyanstack/cyanstack/internal/auth/oidc"
 	"github.com/cyanstack/cyanstack/internal/drivers/interfaces"
 	"github.com/cyanstack/cyanstack/internal/orchestrator"
@@ -150,11 +149,12 @@ func (s *Server) setupOIDCRoutes() {
 	s.router.Any("/keys", gin.WrapH(oidcHandler))
 	s.router.Any("/end_session", gin.WrapH(oidcHandler))
 
-	// Login UI (custom handlers)
-	authHandler := auth.NewHandler(s.oidcProvider)
-	s.router.GET("/login", authHandler.LoginPage)
-	s.router.POST("/login", authHandler.LoginSubmit)
-	s.router.GET("/logout", authHandler.Logout)
+	// Auth API endpoints (under /api/v1)
+	authAPIHandler := handlers.NewAuthAPIHandler(s.oidcProvider)
+	v1 := s.router.Group("/api/v1")
+	v1.GET("/auth/me", authAPIHandler.GetCurrentUser)
+	v1.POST("/auth/login", authAPIHandler.Login)
+	v1.POST("/auth/logout", authAPIHandler.Logout)
 }
 
 // setupStaticFileServing configures serving of embedded frontend assets with SPA fallback.
@@ -177,7 +177,7 @@ func (s *Server) setupStaticFileServing() {
 		if strings.HasPrefix(path, "/.well-known/") ||
 			path == "/authorize" || strings.HasPrefix(path, "/authorize/") ||
 			path == "/oauth/token" || path == "/userinfo" || path == "/keys" ||
-			path == "/end_session" || path == "/login" || path == "/logout" {
+			path == "/end_session" {
 			c.Next()
 			return
 		}
