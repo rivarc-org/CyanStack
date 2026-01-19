@@ -6,7 +6,8 @@
       "Bash(go mod tidy:*)",
       "Bash(go build:*)",
       "Bash(./cyan-cli parse:*)",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Bash(grep:*)"
     ]
   }
 }
