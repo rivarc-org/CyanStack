@@ -22,7 +22,7 @@ The visual editor lives in [cyan-ui](https://github.com/rivarc-org/cyan-ui).
 The interaction works: connecting two services is enough to configure both.
 But a model that runs a demo is far from one that runs production software.
 
-- **Reliability was the biggest problem.** [Optional: one or two concrete failures, e.g. what broke when a deployment failed halfway.]
+- **Reliability was the biggest problem:** Random bugs & issues caused frequent downtime.
 - **The manifest model was too thin.** The Medusa manifest covers a database, a
   secret and a seed command. Production Medusa v2 also needs separate server and
   worker processes, Redis, migrations ordered before startup, and a revocable
